@@ -10,6 +10,7 @@ function App() {
         <button onClick={() => loKey.initializeSigner(Date.now() + 7 * 24 * 60 * 60 * 1000)}>
           Initialize
         </button>
+        <button onClick={() => loKey.sign('Sign me!')}>Sign</button>
       </div>
     </>
   );

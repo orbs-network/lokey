@@ -7,8 +7,10 @@
     "entry": [
       "src/loKey.ts"
     ],
+    "minify": true,
     "dts": true,
     "clean": true,
+    "splitting": true,
     "platform": "browser",
     "format": [
       "cjs",
@@ -17,6 +19,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "watch": "tsup --watch",
     "start": "node dist/index.cjs",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

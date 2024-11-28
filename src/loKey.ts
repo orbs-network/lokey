@@ -35,18 +35,20 @@ export class LoKey {
     }
   }
 
-  async sign() {
-    console.log('LoKey.sign');
+  async sign(message: string) {
+    console.log('LoKey.sign', message);
 
     if (!this.key) {
       throw new Error('LoKey.sign: key is not initialized');
     }
 
-    const signature = await window.crypto.subtle.sign(
-      { name: 'HMAC' },
-      this.key,
-      new Uint8Array([1, 2, 3, 4])
-    );
-    console.log('LoKey.sign: signature', signature);
+    const encoder = new TextEncoder();
+    const payload = encoder.encode(message);
+
+    const signature = await window.crypto.subtle.sign({ name: 'HMAC' }, this.key, payload);
+    const binStr = String.fromCodePoint(...new Uint8Array(signature));
+    const signatureBase64 = btoa(binStr);
+    console.log('LoKey.sign: signature', signatureBase64);
+    return signatureBase64;
   }
 }

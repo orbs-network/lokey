@@ -1,0 +1,36 @@
+{
+  "name": "delegated-signer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "tsup": {
+    "entry": [
+      "src/loKey.ts"
+    ],
+    "dts": true,
+    "clean": true,
+    "platform": "browser",
+    "format": [
+      "cjs",
+      "esm"
+    ]
+  },
+  "scripts": {
+    "build": "tsup",
+    "start": "node dist/index.cjs",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "eslint": "^9.15.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.15.0"
+  }
+}

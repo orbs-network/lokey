@@ -1,54 +1,88 @@
-export class LoKey {
-  key: CryptoKey | null = null;
-  expiry: number | null = null;
+// 24 hours in milliseconds
+const SESSION_TIMEOUT = 24 * 60 * 60 * 1000;
 
+export class LoKey {
   constructor() {
     console.log('LoKey constructor');
-
-    if (typeof window === 'undefined') {
+    if (
+      typeof globalThis.window === 'undefined' ||
+      !(
+        globalThis.PublicKeyCredential !== undefined &&
+        typeof globalThis.PublicKeyCredential === 'function'
+      )
+    ) {
       throw new Error('LoKey can only be used in a browser environment.');
     }
   }
 
-  async initializeSigner(expiry: number) {
-    console.log('LoKey.create');
-    // TODO: checks if there is already an existing signer created/stored
-    // if not, create a new signer and store it
+  async initializeSigner() {
+    const credentialId = window.sessionStorage.getItem('credentialId');
 
-    // create a new signer
-    if (this.expiry !== expiry) {
-      this.expiry = expiry;
+    if (credentialId) {
+      return;
     }
-
-    try {
-      this.key = await window.crypto.subtle.generateKey(
-        {
-          name: 'HMAC',
-          hash: { name: 'SHA-512' },
-        },
-        false,
-        ['sign', 'verify']
-      );
-      console.log('LoKey.create: key created!', this.key);
-    } catch (error) {
-      console.error('LoKey.create: error', error);
-    }
+    await this.generateWebAuthnKey();
   }
 
-  async sign(message: string) {
-    console.log('LoKey.sign', message);
+  private async generateWebAuthnKey() {
+    console.log('LoKey.generateWebAuthnKey');
+    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
 
-    if (!this.key) {
-      throw new Error('LoKey.sign: key is not initialized');
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp: {
+          name: 'LoKey',
+        },
+        user: {
+          id: new Uint8Array(16),
+          name: 'user',
+          displayName: 'User Example',
+        },
+        pubKeyCredParams: [
+          {
+            type: 'public-key',
+            alg: -7,
+          },
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: 'platform',
+          userVerification: 'required',
+        },
+        timeout: 60000,
+      },
+    });
+
+    if (!credential) {
+      throw new Error('LoKey.generateWebAuthnKey: credential is null');
     }
 
-    const encoder = new TextEncoder();
-    const payload = encoder.encode(message);
+    console.log('LoKey.generateWebAuthnKey: credential', credential);
 
-    const signature = await window.crypto.subtle.sign({ name: 'HMAC' }, this.key, payload);
-    const binStr = String.fromCodePoint(...new Uint8Array(signature));
-    const signatureBase64 = btoa(binStr);
-    console.log('LoKey.sign: signature', signatureBase64);
-    return signatureBase64;
+    window.sessionStorage.setItem('credentialId', credential.id);
+    window.sessionStorage.setItem('sessionExpiry', String(Date.now() + SESSION_TIMEOUT));
+
+    // Extract the attestation object
+    const publicKeyBuffer = (
+      (credential as PublicKeyCredential).response as AuthenticatorAttestationResponse
+    ).getPublicKey();
+
+    if (!publicKeyBuffer) {
+      throw new Error('LoKey.generateWebAuthnKey: publicKeyBuffer is null');
+    }
+
+    const binStr = String.fromCodePoint(...new Uint8Array(publicKeyBuffer));
+    const publicKeyBase64 = btoa(binStr);
+    window.sessionStorage.setItem('publicKey', publicKeyBase64);
+
+    return credential.id;
+  }
+
+  // async sign(message: string) {}
+
+  // async verify(message: string, signatureBase64: string) {}
+
+  async getPublicKey() {
+    return window.sessionStorage.getItem('publicKey');
   }
 }

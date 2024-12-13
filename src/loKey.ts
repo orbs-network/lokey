@@ -12,7 +12,7 @@ const SESSION_TIMEOUT = 24 * 60 * 60 * 1000;
 export class LoKey {
   private signers: LoKeySigner[] = [];
 
-  constructor() {
+  constructor(private appName: string) {
     if (
       typeof globalThis.window === 'undefined' ||
       !(
@@ -38,11 +38,23 @@ export class LoKey {
     window.sessionStorage.setItem('loKeyState', JSON.stringify({ signers: this.signers }));
   }
 
+  private pruneExpiredSigners() {
+    this.signers = this.signers.filter((s) => s.sessionExpiry > Date.now());
+  }
+
+  getSigner(publicKey: string) {
+    this.pruneExpiredSigners();
+    return this.signers.find((s) => s.publicKey === publicKey);
+  }
+
   getSigners() {
+    this.pruneExpiredSigners();
     return this.signers;
   }
 
   async initializeSigner() {
+    this.pruneExpiredSigners();
+
     if (this.signers.length > 0) {
       return;
     }
@@ -59,7 +71,8 @@ export class LoKey {
       publicKey: {
         challenge,
         rp: {
-          name: 'LoKey',
+          name: this.appName,
+          id: window.location.hostname,
         },
         user: {
           id: randomUserId,
@@ -69,7 +82,7 @@ export class LoKey {
         pubKeyCredParams: [
           {
             type: 'public-key',
-            alg: -7,
+            alg: -7, // ECDSA w/ SHA-256
           },
         ],
         authenticatorSelection: {
@@ -104,7 +117,7 @@ export class LoKey {
   }
 
   async sign(publicKey: string, message: string): Promise<LoKeySignature> {
-    const signer = this.signers.find((s) => s.publicKey === publicKey);
+    const signer = this.getSigner(publicKey);
 
     if (!signer) {
       throw new Error('Signer not found');
@@ -147,7 +160,13 @@ export class LoKey {
   }
 
   async verify(publicKeyBase64: string, signature: string, data: string): Promise<boolean> {
-    const publicKeyBuffer = convertFromBase64(publicKeyBase64);
+    const signer = this.getSigner(publicKeyBase64);
+
+    if (!signer) {
+      throw new Error('Signer not found');
+    }
+
+    const publicKeyBuffer = convertFromBase64(signer.publicKey);
     const publicKey = await window.crypto.subtle.importKey(
       'spki',
       publicKeyBuffer,

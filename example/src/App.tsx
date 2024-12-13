@@ -131,7 +131,7 @@ function App() {
         {isVerified ? (
           <div className="row success">Signature verified!</div>
         ) : signature ? (
-          <div className="row">Message signed</div>
+          <div className="row">Message signed.</div>
         ) : null}
       </div>
     </main>

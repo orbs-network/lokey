@@ -10,7 +10,7 @@ import {
 const SESSION_TIMEOUT = 24 * 60 * 60 * 1000;
 
 export class LoKey {
-  private signers: LoKeySigner[] = [];
+  private _signers: LoKeySigner[] = [];
 
   constructor(private appName: string) {
     if (
@@ -33,9 +33,17 @@ export class LoKey {
     this.signers = signers;
   }
 
-  private addSigner(signer: LoKeySigner) {
-    this.signers.push(signer);
+  private get signers() {
+    return this._signers;
+  }
+
+  private set signers(signers: LoKeySigner[]) {
+    this._signers = signers;
     window.sessionStorage.setItem('loKeyState', JSON.stringify({ signers: this.signers }));
+  }
+
+  private addSigner(signer: LoKeySigner) {
+    this.signers = [...this.signers, signer];
   }
 
   private pruneExpiredSigners() {

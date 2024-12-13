@@ -1,9 +1,16 @@
+import { LoKeySignature } from './types';
+import {
+  convertEcdsaAsn1Signature,
+  convertFromBase64,
+  convertToBase64,
+  mergeBuffer,
+} from './utils';
+
 // 24 hours in milliseconds
 const SESSION_TIMEOUT = 24 * 60 * 60 * 1000;
 
 export class LoKey {
   constructor() {
-    console.log('LoKey constructor');
     if (
       typeof globalThis.window === 'undefined' ||
       !(
@@ -15,29 +22,46 @@ export class LoKey {
     }
   }
 
-  async initializeSigner() {
+  signerExists() {
     const credentialId = window.sessionStorage.getItem('credentialId');
+    const sessionExpiry = window.sessionStorage.getItem('sessionExpiry');
 
-    if (credentialId) {
-      return;
+    if (!credentialId || !sessionExpiry) {
+      return false;
     }
-    await this.generateWebAuthnKey();
+
+    const expiry = Number(sessionExpiry);
+    if (Date.now() > expiry) {
+      return false;
+    }
+
+    return true;
   }
 
-  private async generateWebAuthnKey() {
-    console.log('LoKey.generateWebAuthnKey');
+  async initializeSigner() {
+    if (this.signerExists()) {
+      return;
+    }
+
+    await this.createSigner();
+  }
+
+  private async createSigner() {
     const challenge = window.crypto.getRandomValues(new Uint8Array(32));
 
-    const credential = await navigator.credentials.create({
+    const randomUserId = window.crypto.getRandomValues(new Uint8Array(16));
+    console.log('randomUserId', randomUserId);
+
+    const credential = await window.navigator.credentials.create({
       publicKey: {
         challenge,
         rp: {
           name: 'LoKey',
         },
         user: {
-          id: new Uint8Array(16),
-          name: 'user',
-          displayName: 'User Example',
+          id: randomUserId,
+          name: 'Perps 2.0 Delegated Signer',
+          displayName: 'Perps 2.0 Delegated Signer',
         },
         pubKeyCredParams: [
           {
@@ -46,8 +70,7 @@ export class LoKey {
           },
         ],
         authenticatorSelection: {
-          authenticatorAttachment: 'platform',
-          userVerification: 'required',
+          userVerification: 'preferred',
         },
         timeout: 60000,
       },
@@ -57,32 +80,91 @@ export class LoKey {
       throw new Error('LoKey.generateWebAuthnKey: credential is null');
     }
 
-    console.log('LoKey.generateWebAuthnKey: credential', credential);
-
     window.sessionStorage.setItem('credentialId', credential.id);
     window.sessionStorage.setItem('sessionExpiry', String(Date.now() + SESSION_TIMEOUT));
 
-    // Extract the attestation object
-    const publicKeyBuffer = (
+    const publicKey = (
       (credential as PublicKeyCredential).response as AuthenticatorAttestationResponse
     ).getPublicKey();
 
-    if (!publicKeyBuffer) {
-      throw new Error('LoKey.generateWebAuthnKey: publicKeyBuffer is null');
+    if (!publicKey) {
+      throw new Error('LoKey.generateWebAuthnKey: public key is null');
     }
 
-    const binStr = String.fromCodePoint(...new Uint8Array(publicKeyBuffer));
-    const publicKeyBase64 = btoa(binStr);
+    const publicKeyBase64 = convertToBase64(publicKey);
     window.sessionStorage.setItem('publicKey', publicKeyBase64);
 
     return credential.id;
   }
 
-  // async sign(message: string) {}
+  async sign(message: string): Promise<LoKeySignature> {
+    const credentialId = sessionStorage.getItem('credentialId');
 
-  // async verify(message: string, signatureBase64: string) {}
+    if (!credentialId) {
+      throw new Error('Credential ID not found. Generate a key first.');
+    }
 
-  async getPublicKey() {
-    return window.sessionStorage.getItem('publicKey');
+    const challenge = new TextEncoder().encode(message);
+
+    const assertion = await window.navigator.credentials.get({
+      publicKey: {
+        challenge,
+        allowCredentials: [
+          {
+            id: Uint8Array.from(atob(credentialId.replace(/_/g, '/').replace(/-/g, '+')), (c) =>
+              c.charCodeAt(0)
+            ),
+            type: 'public-key',
+          },
+        ],
+        timeout: 60000,
+        userVerification: 'discouraged', // Skip user verification for this session
+      },
+    });
+
+    const authAssertionResponse = (assertion as PublicKeyCredential)
+      .response as AuthenticatorAssertionResponse;
+
+    const signature = convertEcdsaAsn1Signature(new Uint8Array(authAssertionResponse.signature));
+
+    const hashedClientDataJSON = await window.crypto.subtle.digest(
+      'SHA-256',
+      authAssertionResponse.clientDataJSON
+    );
+    const data = mergeBuffer(authAssertionResponse.authenticatorData, hashedClientDataJSON);
+
+    return {
+      signature: convertToBase64(signature),
+      data: convertToBase64(data),
+    };
+  }
+
+  async verify(signature: string, data: string): Promise<boolean> {
+    const publicKeyBase64 = sessionStorage.getItem('publicKey');
+    if (!publicKeyBase64) {
+      throw new Error('Public key not found');
+    }
+
+    const publicKeyBuffer = convertFromBase64(publicKeyBase64);
+    const publicKey = await window.crypto.subtle.importKey(
+      'spki',
+      publicKeyBuffer,
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      true,
+      ['verify']
+    );
+
+    const signatureBuffer = convertFromBase64(signature);
+    const dataBuffer = convertFromBase64(data);
+
+    // Verify the signature
+    const isValid = await window.crypto.subtle.verify(
+      { name: 'ECDSA', hash: { name: 'SHA-256' } },
+      publicKey,
+      signatureBuffer,
+      dataBuffer
+    );
+
+    return isValid;
   }
 }

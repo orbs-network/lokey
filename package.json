@@ -1,11 +1,11 @@
 {
-  "name": "delegated-signer",
-  "version": "1.0.0",
+  "name": "lokey",
+  "version": "0.0.1",
   "description": "",
-  "main": "index.js",
+  "main": "index.ts",
   "tsup": {
     "entry": [
-      "src/loKey.ts"
+      "src/index.ts"
     ],
     "minify": true,
     "dts": true,
@@ -20,7 +20,6 @@
   "scripts": {
     "build": "tsup",
     "watch": "tsup --watch",
-    "start": "node dist/index.cjs",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

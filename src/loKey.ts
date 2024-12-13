@@ -1,4 +1,4 @@
-import { LoKeySignature } from './types';
+import { LoKeySignature, LoKeySigner, LoKeyState } from './types';
 import {
   convertEcdsaAsn1Signature,
   convertFromBase64,
@@ -10,6 +10,8 @@ import {
 const SESSION_TIMEOUT = 24 * 60 * 60 * 1000;
 
 export class LoKey {
+  private signers: LoKeySigner[] = [];
+
   constructor() {
     if (
       typeof globalThis.window === 'undefined' ||
@@ -20,37 +22,38 @@ export class LoKey {
     ) {
       throw new Error('LoKey can only be used in a browser environment.');
     }
-  }
 
-  signerExists() {
-    const credentialId = window.sessionStorage.getItem('credentialId');
-    const sessionExpiry = window.sessionStorage.getItem('sessionExpiry');
+    const loKeyState = window.sessionStorage.getItem('loKeyState');
 
-    if (!credentialId || !sessionExpiry) {
-      return false;
-    }
-
-    const expiry = Number(sessionExpiry);
-    if (Date.now() > expiry) {
-      return false;
-    }
-
-    return true;
-  }
-
-  async initializeSigner() {
-    if (this.signerExists()) {
+    if (!loKeyState) {
       return;
     }
 
-    await this.createSigner();
+    const { signers } = JSON.parse(loKeyState) as LoKeyState;
+    this.signers = signers;
   }
 
-  private async createSigner() {
+  private addSigner(signer: LoKeySigner) {
+    this.signers.push(signer);
+    window.sessionStorage.setItem('loKeyState', JSON.stringify({ signers: this.signers }));
+  }
+
+  getSigners() {
+    return this.signers;
+  }
+
+  async initializeSigner() {
+    if (this.signers.length > 0) {
+      return;
+    }
+
+    return await this.createSigner();
+  }
+
+  async createSigner(name = 'LoKey Delegated Signer') {
     const challenge = window.crypto.getRandomValues(new Uint8Array(32));
 
     const randomUserId = window.crypto.getRandomValues(new Uint8Array(16));
-    console.log('randomUserId', randomUserId);
 
     const credential = await window.navigator.credentials.create({
       publicKey: {
@@ -60,8 +63,8 @@ export class LoKey {
         },
         user: {
           id: randomUserId,
-          name: 'Perps 2.0 Delegated Signer',
-          displayName: 'Perps 2.0 Delegated Signer',
+          name,
+          displayName: name,
         },
         pubKeyCredParams: [
           {
@@ -80,9 +83,6 @@ export class LoKey {
       throw new Error('LoKey.generateWebAuthnKey: credential is null');
     }
 
-    window.sessionStorage.setItem('credentialId', credential.id);
-    window.sessionStorage.setItem('sessionExpiry', String(Date.now() + SESSION_TIMEOUT));
-
     const publicKey = (
       (credential as PublicKeyCredential).response as AuthenticatorAttestationResponse
     ).getPublicKey();
@@ -92,16 +92,22 @@ export class LoKey {
     }
 
     const publicKeyBase64 = convertToBase64(publicKey);
-    window.sessionStorage.setItem('publicKey', publicKeyBase64);
 
-    return credential.id;
+    this.addSigner({
+      name,
+      credentialId: credential.id,
+      publicKey: publicKeyBase64,
+      sessionExpiry: Date.now() + SESSION_TIMEOUT,
+    });
+
+    return publicKeyBase64;
   }
 
-  async sign(message: string): Promise<LoKeySignature> {
-    const credentialId = sessionStorage.getItem('credentialId');
+  async sign(publicKey: string, message: string): Promise<LoKeySignature> {
+    const signer = this.signers.find((s) => s.publicKey === publicKey);
 
-    if (!credentialId) {
-      throw new Error('Credential ID not found. Generate a key first.');
+    if (!signer) {
+      throw new Error('Signer not found');
     }
 
     const challenge = new TextEncoder().encode(message);
@@ -111,8 +117,9 @@ export class LoKey {
         challenge,
         allowCredentials: [
           {
-            id: Uint8Array.from(atob(credentialId.replace(/_/g, '/').replace(/-/g, '+')), (c) =>
-              c.charCodeAt(0)
+            id: Uint8Array.from(
+              atob(signer.credentialId.replace(/_/g, '/').replace(/-/g, '+')),
+              (c) => c.charCodeAt(0)
             ),
             type: 'public-key',
           },
@@ -139,12 +146,7 @@ export class LoKey {
     };
   }
 
-  async verify(signature: string, data: string): Promise<boolean> {
-    const publicKeyBase64 = sessionStorage.getItem('publicKey');
-    if (!publicKeyBase64) {
-      throw new Error('Public key not found');
-    }
-
+  async verify(publicKeyBase64: string, signature: string, data: string): Promise<boolean> {
     const publicKeyBuffer = convertFromBase64(publicKeyBase64);
     const publicKey = await window.crypto.subtle.importKey(
       'spki',

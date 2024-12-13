@@ -7,7 +7,11 @@ function App() {
   const [signature, setSignature] = useState<LoKeySignature | null>(null);
   const [message, setMessage] = useState('');
   const [isVerified, setVerified] = useState(false);
-  const [registered, setRegistered] = useState(loKey.signerExists());
+  const [initialised, setInitialised] = useState(loKey.getSigners().length > 0);
+  const [currentSigner, setCurrentSigner] = useState<string | null>(
+    loKey.getSigners().length > 0 ? loKey.getSigners()[0].publicKey : null
+  );
+  const [signerName, setSignerName] = useState('');
 
   return (
     <main>
@@ -16,21 +20,56 @@ function App() {
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <button
             onClick={async () => {
-              await loKey.initializeSigner();
-              setRegistered(loKey.signerExists());
+              const publicKey = await loKey.initializeSigner();
+
+              if (!publicKey) {
+                return;
+              }
+
+              setInitialised(loKey.getSigners().length > 0);
+              setCurrentSigner(publicKey);
             }}
-            disabled={registered}
+            disabled={initialised}
           >
-            Register
+            Initialise
           </button>
-          <button
-            onClick={() => {
+        </div>
+        <div className="row"></div>
+        <div className="row">
+          <select
+            value={currentSigner || ''}
+            onChange={(e) => {
+              setCurrentSigner(e.target.value);
+
               setMessage('');
               setSignature(null);
               setVerified(false);
             }}
           >
-            Reset
+            <option value="">Select Signer</option>
+            {loKey.getSigners().map((signer) => (
+              <option key={signer.publicKey} value={signer.publicKey}>
+                {signer.name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            placeholder="Enter Signer Name"
+            value={signerName}
+            onChange={(e) => {
+              setSignerName(e.target.value);
+            }}
+          />
+          <button
+            onClick={async () => {
+              const publicKey = await loKey.createSigner(signerName);
+              setCurrentSigner(publicKey);
+              setSignerName('');
+            }}
+            disabled={!signerName}
+          >
+            Add
           </button>
         </div>
         <div className="row">
@@ -40,33 +79,53 @@ function App() {
             value={message}
             onChange={(e) => {
               setMessage(e.target.value);
+
+              setSignature(null);
+              setVerified(false);
             }}
           />
           <button
             onClick={async () => {
-              const sig = await loKey.sign(message);
+              if (!message || !currentSigner) {
+                return;
+              }
+
+              const sig = await loKey.sign(currentSigner, message);
               setSignature(sig);
               console.log(sig);
             }}
-            disabled={!message}
+            disabled={!message || !currentSigner}
           >
             Sign
           </button>
           <button
             onClick={async () => {
-              if (!signature) {
+              if (!signature || !currentSigner) {
                 return;
               }
               try {
-                const verified = await loKey.verify(signature.signature, signature.data);
+                const verified = await loKey.verify(
+                  currentSigner,
+                  signature.signature,
+                  signature.data
+                );
                 setVerified(verified);
               } catch (error) {
                 console.error(error);
               }
             }}
-            disabled={!signature}
+            disabled={!signature || !currentSigner}
           >
             Verify
+          </button>
+          <button
+            onClick={() => {
+              setMessage('');
+              setSignature(null);
+              setVerified(false);
+            }}
+          >
+            Reset
           </button>
         </div>
         {isVerified ? (

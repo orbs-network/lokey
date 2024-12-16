@@ -2,7 +2,7 @@
   "name": "lokey",
   "version": "0.0.1",
   "description": "",
-  "main": "index.ts",
+  "main": "dist/index.js",
   "tsup": {
     "entry": [
       "src/index.ts"
@@ -19,8 +19,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "watch": "tsup --watch",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "watch": "tsup --watch"
   },
   "keywords": [],
   "author": "",

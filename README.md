@@ -60,3 +60,5 @@ cd example
 npm install
 npm run dev
 ```
+
+The example demonstrates how you can use this library in a React app.

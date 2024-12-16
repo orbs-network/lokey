@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { LoKeySignature } from '../../dist/';
 import { useLoKey } from './useLoKey';
 
+// 24 hours in milliseconds
+const SESSION_TIMEOUT = 24 * 60 * 60 * 1000;
+
 function App() {
   const loKey = useLoKey();
   const [signature, setSignature] = useState<LoKeySignature | null>(null);
@@ -20,7 +23,10 @@ function App() {
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <button
             onClick={async () => {
-              const publicKey = await loKey.initializeSigner();
+              const publicKey = await loKey.createSigner(
+                'LoKey Signer',
+                Date.now() + SESSION_TIMEOUT
+              );
 
               if (!publicKey) {
                 return;
@@ -63,7 +69,7 @@ function App() {
           />
           <button
             onClick={async () => {
-              const publicKey = await loKey.createSigner(signerName);
+              const publicKey = await loKey.createSigner(signerName, Date.now() + SESSION_TIMEOUT);
               setCurrentSigner(publicKey);
               setSignerName('');
             }}

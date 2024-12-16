@@ -6,9 +6,6 @@ import {
   mergeBuffer,
 } from './utils';
 
-// 24 hours in milliseconds
-const SESSION_TIMEOUT = 24 * 60 * 60 * 1000;
-
 export class LoKey {
   private _signers: LoKeySigner[] = [];
 
@@ -60,17 +57,7 @@ export class LoKey {
     return this.signers;
   }
 
-  async initializeSigner() {
-    this.pruneExpiredSigners();
-
-    if (this.signers.length > 0) {
-      return;
-    }
-
-    return await this.createSigner();
-  }
-
-  async createSigner(name = 'LoKey Signer') {
+  async createSigner(name: string, sessionExpiry: number) {
     const challenge = window.crypto.getRandomValues(new Uint8Array(32));
 
     const randomUserId = window.crypto.getRandomValues(new Uint8Array(16));
@@ -118,7 +105,7 @@ export class LoKey {
       name,
       credentialId: credential.id,
       publicKey: publicKeyBase64,
-      sessionExpiry: Date.now() + SESSION_TIMEOUT,
+      sessionExpiry,
     });
 
     return publicKeyBase64;

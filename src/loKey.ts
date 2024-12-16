@@ -70,7 +70,7 @@ export class LoKey {
     return await this.createSigner();
   }
 
-  async createSigner(name = 'LoKey Delegated Signer') {
+  async createSigner(name = 'LoKey Signer') {
     const challenge = window.crypto.getRandomValues(new Uint8Array(32));
 
     const randomUserId = window.crypto.getRandomValues(new Uint8Array(16));
@@ -101,7 +101,7 @@ export class LoKey {
     });
 
     if (!credential) {
-      throw new Error('LoKey.generateWebAuthnKey: credential is null');
+      throw new Error('Credential is null');
     }
 
     const publicKey = (
@@ -109,7 +109,7 @@ export class LoKey {
     ).getPublicKey();
 
     if (!publicKey) {
-      throw new Error('LoKey.generateWebAuthnKey: public key is null');
+      throw new Error('Public key is null');
     }
 
     const publicKeyBase64 = convertToBase64(publicKey);

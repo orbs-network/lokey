@@ -13,20 +13,6 @@ export function convertFromBase64(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-export function validateDecodedBase64(base64: string) {
-  try {
-    const spkiBuffer = convertFromBase64(base64);
-    console.log(
-      'Decoded SPKI Buffer (Hex):',
-      [...new Uint8Array(spkiBuffer)].map((b) => b.toString(16))
-    );
-    return spkiBuffer;
-  } catch (error) {
-    console.error('Error decoding Base64:', error);
-    throw error;
-  }
-}
-
 export function mergeBuffer(buffer1: ArrayBuffer, buffer2: ArrayBuffer) {
   const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
   tmp.set(new Uint8Array(buffer1), 0);
@@ -34,7 +20,7 @@ export function mergeBuffer(buffer1: ArrayBuffer, buffer2: ArrayBuffer) {
   return tmp.buffer;
 }
 
-export function readAsn1IntegerSequence(input: Uint8Array) {
+function readAsn1IntegerSequence(input: Uint8Array) {
   if (input[0] !== 0x30) throw new Error('Input is not an ASN.1 sequence');
   const seqLength = input[1];
   const elements: Uint8Array[] = [];

@@ -1,6 +1,7 @@
 export type LoKeySigner = {
   name: string;
   credentialId: string;
+  // base64 encoded publicKey
   publicKey: string;
   sessionExpiry: number;
 };

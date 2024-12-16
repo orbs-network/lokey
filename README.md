@@ -8,7 +8,7 @@ LoKey also uses the browser's session storage to store insensitive data like the
 
 ## Usage
 
-### constructor(private appName: string)
+### constructor(appName: string)
 
 ```javascript
 const lokey = new LoKey(

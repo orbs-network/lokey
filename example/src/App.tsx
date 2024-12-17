@@ -17,7 +17,10 @@ function App() {
 
   return (
     <main>
-      <h1>LoKey</h1>
+      <div className="row" style={{ alignItems: 'center' }}>
+        <img src="/lokey_stamp_logo.png" alt="LoKey" style={{ height: '50px', width: 'auto' }} />
+        <h1 style={{ fontWeight: 'normal' }}>LoKey</h1>
+      </div>
       <div className="column">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <button
@@ -215,6 +218,9 @@ function App() {
           </div>
         )}
       </div>
+      <small style={{ paddingTop: '40px', color: '#888' }}>
+        Powered by <img src="/orbslogo.svg" alt="Orbs" style={{ height: '12px' }} /> Orbs
+      </small>
     </main>
   );
 }

@@ -25,6 +25,8 @@ const lokey = new LoKey('LoKey Example App');
 
 - `lokey`: A new instance of the LoKey SDK.
 
+---
+
 `createSigner(name: string, sessionExpiry?: number)`
 Create a new signer and retrieve its public key.
 
@@ -46,6 +48,8 @@ const publicKey = await lokey.createSigner(
 
 - `publicKey` (string): The base64-encoded public key.
 
+---
+
 `deleteSigner(publicKey: string)`
 Delete a signer using its public key.
 
@@ -58,6 +62,8 @@ lokey.deleteSigner(publicKey);
 **Inputs**:
 
 - `publicKey` (string, required): The base64-encoded public key of the signer to delete.
+
+---
 
 `getSigner(publicKey: string)`
 Retrieve details of a specific signer.
@@ -79,6 +85,8 @@ const { name, credentialId, publicKey } = await lokey.getSigner(publicKey);
   - `credentialId` (string): The unique credential ID.
   - `publicKey` (string): The base64-encoded public key.
 
+---
+
 `getSigners()`
 Retrieve a list of all signers.
 
@@ -91,6 +99,8 @@ const signers = await lokey.getSigners();
 **Outputs**:
 
 - `signers` (array): A list of all signers in the current session.
+
+---
 
 `sign(publicKey: string, message: string)`
 Sign a message using a signer’s private key.
@@ -110,6 +120,8 @@ const { signature, data } = await lokey.sign(publicKey, message);
 
 - `signature` (string): The base64-encoded signature.
 - `data` (string): The base64-encoded signed data, including the original message.
+
+---
 
 `verify(publicKey: string, signature: string, data: string)`
 Verify a signed message using the public key.

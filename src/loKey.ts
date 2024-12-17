@@ -36,28 +36,22 @@ export class LoKey {
 
   private set signers(signers: LoKeySigner[]) {
     this._signers = signers;
-    window.sessionStorage.setItem('loKeyState', JSON.stringify({ signers: this.signers }));
+    window.sessionStorage.setItem('loKeyState', JSON.stringify({ signers: this._signers }));
   }
 
   private addSigner(signer: LoKeySigner) {
     this.signers = [...this.signers, signer];
   }
 
-  private pruneExpiredSigners() {
-    this.signers = this.signers.filter((s) => s.sessionExpiry > Date.now());
-  }
-
   getSigner(publicKey: string) {
-    this.pruneExpiredSigners();
     return this.signers.find((s) => s.publicKey === publicKey);
   }
 
   getSigners() {
-    this.pruneExpiredSigners();
     return this.signers;
   }
 
-  async createSigner(name: string, sessionExpiry: number) {
+  async createSigner(name: string) {
     const challenge = window.crypto.getRandomValues(new Uint8Array(32));
 
     const randomUserId = window.crypto.getRandomValues(new Uint8Array(16));
@@ -105,7 +99,6 @@ export class LoKey {
       name,
       credentialId: credential.id,
       publicKey: publicKeyBase64,
-      sessionExpiry,
     });
 
     return publicKeyBase64;

@@ -20,7 +20,7 @@ export class LoKey {
       throw new Error('LoKey can only be used in a browser environment.');
     }
 
-    const loKeyState = window.sessionStorage.getItem('loKeyState');
+    const loKeyState = window.localStorage.getItem('loKeyState');
 
     if (!loKeyState) {
       return;
@@ -36,22 +36,28 @@ export class LoKey {
 
   private set signers(signers: LoKeySigner[]) {
     this._signers = signers;
-    window.sessionStorage.setItem('loKeyState', JSON.stringify({ signers: this._signers }));
+    window.localStorage.setItem('loKeyState', JSON.stringify({ signers: this._signers }));
   }
 
   private addSigner(signer: LoKeySigner) {
     this.signers = [...this.signers, signer];
   }
 
+  private pruneExpiredSigners() {
+    this.signers = this.signers.filter((s) => !s.sessionExpiry || s.sessionExpiry > Date.now());
+  }
+
   getSigner(publicKey: string) {
+    this.pruneExpiredSigners();
     return this.signers.find((s) => s.publicKey === publicKey);
   }
 
   getSigners() {
+    this.pruneExpiredSigners();
     return this.signers;
   }
 
-  async createSigner(name: string) {
+  async createSigner(name: string, sessionExpiry?: number) {
     const challenge = window.crypto.getRandomValues(new Uint8Array(32));
 
     const randomUserId = window.crypto.getRandomValues(new Uint8Array(16));
@@ -75,7 +81,7 @@ export class LoKey {
           },
         ],
         authenticatorSelection: {
-          userVerification: 'preferred',
+          userVerification: 'required', // user verification required when creating a signer
         },
         timeout: 60000,
       },
@@ -99,6 +105,7 @@ export class LoKey {
       name,
       credentialId: credential.id,
       publicKey: publicKeyBase64,
+      sessionExpiry,
     });
 
     return publicKeyBase64;
@@ -126,7 +133,7 @@ export class LoKey {
           },
         ],
         timeout: 60000,
-        userVerification: 'discouraged', // Skip user verification for this session
+        userVerification: 'preferred', // user verification preferred when signing but not required.
       },
     });
 
@@ -147,15 +154,15 @@ export class LoKey {
     };
   }
 
-  async verify(publicKeyBase64: string, signature: string, data: string): Promise<boolean> {
-    const signer = this.getSigner(publicKeyBase64);
+  async verify(publicKey: string, signature: string, data: string): Promise<boolean> {
+    const signer = this.getSigner(publicKey);
 
     if (!signer) {
       throw new Error('Signer not found');
     }
 
     const publicKeyBuffer = convertFromBase64(signer.publicKey);
-    const publicKey = await window.crypto.subtle.importKey(
+    const importedPublicKey = await window.crypto.subtle.importKey(
       'spki',
       publicKeyBuffer,
       { name: 'ECDSA', namedCurve: 'P-256' },
@@ -169,7 +176,7 @@ export class LoKey {
     // Verify the signature
     const isValid = await window.crypto.subtle.verify(
       { name: 'ECDSA', hash: { name: 'SHA-256' } },
-      publicKey,
+      importedPublicKey,
       signatureBuffer,
       dataBuffer
     );

@@ -88,7 +88,7 @@ export class LoKey {
     });
 
     if (!credential) {
-      throw new Error('Credential is null');
+      throw new Error('Credential not created.');
     }
 
     const publicKey = (
@@ -96,7 +96,7 @@ export class LoKey {
     ).getPublicKey();
 
     if (!publicKey) {
-      throw new Error('Public key is null');
+      throw new Error('Credential has no public key.');
     }
 
     const publicKeyBase64 = convertToBase64(publicKey);
@@ -119,7 +119,7 @@ export class LoKey {
     const signer = this.getSigner(publicKey);
 
     if (!signer) {
-      throw new Error('Signer not found');
+      throw new Error('Signer not found. Incorrect public key or signer has expired.');
     }
 
     const challenge = new TextEncoder().encode(message);
@@ -162,7 +162,7 @@ export class LoKey {
     const signer = this.getSigner(publicKey);
 
     if (!signer) {
-      throw new Error('Signer not found');
+      throw new Error('Signer not found. Incorrect public key or signer has expired.');
     }
 
     const publicKeyBuffer = convertFromBase64(signer.publicKey);

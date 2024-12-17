@@ -40,6 +40,16 @@ const publicKey = await lokey.createSigner(
 
 - `publicKey`: A base64 encoded public key.
 
+### deleteSigner(publicKey: string)
+
+```javascript
+lokey.deleteSigner(publicKey);
+```
+
+#### Inputs
+
+- `publicKey`: The base64 encoded public key of the signer you want to delete.
+
 ### getSigner(publicKey: string)
 
 ```javascript

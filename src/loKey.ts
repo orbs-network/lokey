@@ -111,6 +111,10 @@ export class LoKey {
     return publicKeyBase64;
   }
 
+  deleteSigner(publicKey: string) {
+    this.signers = this.signers.filter((s) => s.publicKey !== publicKey);
+  }
+
   async sign(publicKey: string, message: string): Promise<LoKeySignature> {
     const signer = this.getSigner(publicKey);
 

@@ -162,8 +162,6 @@ const isVerified = await lokey.verify(publicKey, signature, data);
 To run the included example, follow these steps:
 
 ```bash
-npm install
-npm run build
 cd example
 npm install
 npm run dev

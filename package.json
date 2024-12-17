@@ -1,8 +1,11 @@
 {
-  "name": "lokey",
+  "name": "@orbs-network/lokey",
   "version": "0.0.1",
-  "description": "",
+  "description": "LoKey is a lightweight library that leverages web-native APIs, including WebAuthn and Subtle Crypto, to securely authenticate users and sign transactions. Private keys are stored within a secure enclave on the user's device, ensuring robust protection.",
   "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
   "tsup": {
     "entry": [
       "src/index.ts"
@@ -21,8 +24,22 @@
     "build": "tsup",
     "watch": "tsup --watch"
   },
-  "keywords": [],
-  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/orbs-network/lokey.git"
+  },
+  "bugs": {
+    "url": "https://github.com/orbs-network/lokey/issues"
+  },
+  "homepage": "https://github.com/orbs-network/lokey#readme",
+  "keywords": [
+    "crypto",
+    "signer",
+    "wallet",
+    "trading",
+    "delegated signer"
+  ],
+  "author": "sukhsinghcodes",
   "license": "ISC",
   "type": "module",
   "devDependencies": {

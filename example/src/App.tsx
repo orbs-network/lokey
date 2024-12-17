@@ -7,12 +7,11 @@ function App() {
   const [signature, setSignature] = useState<LoKeySignature | null>(null);
   const [message, setMessage] = useState('');
   const [isVerified, setVerified] = useState(false);
-  const [initialised, setInitialised] = useState(loKey.getSigners().length > 0);
   const [currentSigner, setCurrentSigner] = useState<string | null>(
     loKey.getSigners().length > 0 ? loKey.getSigners()[0].publicKey : null
   );
   const [signerName, setSignerName] = useState('');
-  const [signerExpiryMins, setSignerExpiryMins] = useState('1');
+  const [signerExpiryMs, setSignerExpiryMs] = useState('');
   const [error, setError] = useState<Error | null>(null);
 
   return (
@@ -22,58 +21,40 @@ function App() {
         <h1 style={{ fontWeight: 'normal' }}>LoKey</h1>
       </div>
       <div className="column">
-        <div className="row" style={{ justifyContent: 'space-between' }}>
-          <button
-            onClick={async () => {
-              try {
-                const publicKey = await loKey.createSigner('LoKey Example App Signer');
-
-                if (!publicKey) {
-                  return;
-                }
-
-                setInitialised(loKey.getSigners().length > 0);
-                setCurrentSigner(publicKey);
-              } catch (err) {
-                setError(err as Error);
-              }
-            }}
-            disabled={initialised}
-          >
-            Initialise
-          </button>
-        </div>
         <div className="column" style={{ gap: 2 }}>
           <label>
-            <small>Create signer:</small>
+            <small>
+              <strong>Create a signer</strong>
+            </small>
           </label>
           <div className="row">
             <input
               type="text"
-              placeholder="Enter Signer Name"
+              placeholder="Enter a name"
               value={signerName}
               onChange={(e) => {
                 setSignerName(e.target.value);
               }}
             />
             <select
-              value={signerExpiryMins || ''}
+              value={signerExpiryMs}
               onChange={(e) => {
-                setSignerExpiryMins(e.target.value);
+                setSignerExpiryMs(e.target.value);
               }}
               style={{ width: '150px', minWidth: '150px' }}
             >
-              <option value="1">1 min</option>
-              <option value="10">10 mins</option>
-              <option value="30">30 mins</option>
-              <option value="60">60 mins</option>
+              <option value="">No expiry</option>
+              <option value={60 * 1000}>1 min</option>
+              <option value={60 * 60 * 1000}>1 hour</option>
+              <option value={24 * 60 * 60 * 1000}>1 day</option>
+              <option value={7 * 24 * 60 * 60 * 1000}>1 week</option>
             </select>
             <button
               onClick={async () => {
                 try {
                   const publicKey = await loKey.createSigner(
                     signerName,
-                    Date.now() + Number(signerExpiryMins) * 60 * 1000
+                    signerExpiryMs ? Date.now() + Number(signerExpiryMs) : undefined
                   );
                   setCurrentSigner(publicKey);
                   setSignerName('');
@@ -81,11 +62,12 @@ function App() {
                   setSignature(null);
                   setVerified(false);
                   setError(null);
+                  setSignerExpiryMs('');
                 } catch (err) {
                   setError(err as Error);
                 }
               }}
-              disabled={!signerName || !signerExpiryMins}
+              disabled={!signerName || !signerExpiryMs}
             >
               Create
             </button>
@@ -93,7 +75,9 @@ function App() {
         </div>
         <div className="column" style={{ gap: 2 }}>
           <label>
-            <small>Select signer:</small>
+            <small>
+              <strong>Signer</strong>
+            </small>
           </label>
 
           <div className="row">
@@ -108,7 +92,7 @@ function App() {
                 setError(null);
               }}
             >
-              <option value="">Select Signer</option>
+              <option value="">Select a signer</option>
               {loKey.getSigners().map((signer) => (
                 <option key={signer.publicKey} value={signer.publicKey}>
                   {signer.name}
@@ -128,7 +112,6 @@ function App() {
                 setSignature(null);
                 setVerified(false);
                 setError(null);
-                setInitialised(loKey.getSigners().length > 0);
               }}
               disabled={!currentSigner}
             >
@@ -138,7 +121,9 @@ function App() {
         </div>
         <div className="column" style={{ gap: 2 }}>
           <label>
-            <small>Enter message:</small>
+            <small>
+              <strong>Enter message</strong>
+            </small>
           </label>
 
           <div className="row">
@@ -213,7 +198,7 @@ function App() {
           ) : null}
         </div>
         {error && (
-          <div className="row" style={{ fontWeight: 'bold', color: '#aa0022' }}>
+          <div className="row" style={{ fontWeight: 'bold', color: '#aa0022', width: '100%' }}>
             Error: {error.message}
           </div>
         )}

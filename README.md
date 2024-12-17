@@ -6,6 +6,14 @@
 
 Additionally, LoKey uses the browser’s local storage to manage non-sensitive data, such as the signer’s public key.
 
+## Installation
+
+To install LoKey, use npm:
+
+```bash
+npm install @orbs-network/lokey
+```
+
 ## Usage
 
 ### Constructor: `LoKey(appName: string)`

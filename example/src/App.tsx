@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LoKeySignature } from '../../dist/';
+import { LoKeySignature } from '@orbs-network/lokey';
 import { useLoKey } from './useLoKey';
 
 function App() {

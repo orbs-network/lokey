@@ -95,7 +95,11 @@ function App() {
               <option value="">Select a signer</option>
               {loKey.getSigners().map((signer) => (
                 <option key={signer.publicKey} value={signer.publicKey}>
-                  {signer.name}
+                  {signer.name} (
+                  {signer.sessionExpiry
+                    ? new Date(signer.sessionExpiry).toLocaleString()
+                    : 'No expiry'}
+                  )
                 </option>
               ))}
             </select>

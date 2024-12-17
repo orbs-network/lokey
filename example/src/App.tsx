@@ -67,7 +67,7 @@ function App() {
                   setError(err as Error);
                 }
               }}
-              disabled={!signerName || !signerExpiryMs}
+              disabled={!signerName}
             >
               Create
             </button>

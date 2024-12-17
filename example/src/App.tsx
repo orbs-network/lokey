@@ -12,7 +12,8 @@ function App() {
     loKey.getSigners().length > 0 ? loKey.getSigners()[0].publicKey : null
   );
   const [signerName, setSignerName] = useState('');
-  const [signerExpiryMins, setSignerExpiryMins] = useState('');
+  const [signerExpiryMins, setSignerExpiryMins] = useState('1');
+  const [error, setError] = useState<Error | null>(null);
 
   return (
     <main>
@@ -21,14 +22,18 @@ function App() {
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <button
             onClick={async () => {
-              const publicKey = await loKey.createSigner('LoKey Example App Signer');
+              try {
+                const publicKey = await loKey.createSigner('LoKey Example App Signer');
 
-              if (!publicKey) {
-                return;
+                if (!publicKey) {
+                  return;
+                }
+
+                setInitialised(loKey.getSigners().length > 0);
+                setCurrentSigner(publicKey);
+              } catch (err) {
+                setError(err as Error);
               }
-
-              setInitialised(loKey.getSigners().length > 0);
-              setCurrentSigner(publicKey);
             }}
             disabled={initialised}
           >
@@ -62,15 +67,20 @@ function App() {
             </select>
             <button
               onClick={async () => {
-                const publicKey = await loKey.createSigner(
-                  signerName,
-                  Date.now() + Number(signerExpiryMins) * 60 * 1000
-                );
-                setCurrentSigner(publicKey);
-                setSignerName('');
-                setMessage('');
-                setSignature(null);
-                setVerified(false);
+                try {
+                  const publicKey = await loKey.createSigner(
+                    signerName,
+                    Date.now() + Number(signerExpiryMins) * 60 * 1000
+                  );
+                  setCurrentSigner(publicKey);
+                  setSignerName('');
+                  setMessage('');
+                  setSignature(null);
+                  setVerified(false);
+                  setError(null);
+                } catch (err) {
+                  setError(err as Error);
+                }
               }}
               disabled={!signerName || !signerExpiryMins}
             >
@@ -92,6 +102,7 @@ function App() {
                 setMessage('');
                 setSignature(null);
                 setVerified(false);
+                setError(null);
               }}
             >
               <option value="">Select Signer</option>
@@ -113,6 +124,8 @@ function App() {
                 setMessage('');
                 setSignature(null);
                 setVerified(false);
+                setError(null);
+                setInitialised(loKey.getSigners().length > 0);
               }}
               disabled={!currentSigner}
             >
@@ -135,17 +148,24 @@ function App() {
 
                 setSignature(null);
                 setVerified(false);
+                setError(null);
               }}
             />
             <button
               onClick={async () => {
+                setVerified(false);
+                setSignature(null);
                 if (!message || !currentSigner) {
                   return;
                 }
 
-                const sig = await loKey.sign(currentSigner, message);
-                setSignature(sig);
-                console.log(sig);
+                try {
+                  const sig = await loKey.sign(currentSigner, message);
+                  setSignature(sig);
+                  console.log(sig);
+                } catch (err) {
+                  setError(err as Error);
+                }
               }}
               disabled={!message || !currentSigner}
             >
@@ -153,6 +173,7 @@ function App() {
             </button>
             <button
               onClick={async () => {
+                setVerified(false);
                 if (!signature || !currentSigner) {
                   return;
                 }
@@ -163,8 +184,8 @@ function App() {
                     signature.data
                   );
                   setVerified(verified);
-                } catch (error) {
-                  console.error(error);
+                } catch (err) {
+                  setError(err as Error);
                 }
               }}
               disabled={!signature || !currentSigner}
@@ -176,6 +197,7 @@ function App() {
                 setMessage('');
                 setSignature(null);
                 setVerified(false);
+                setError(null);
               }}
             >
               Reset
@@ -187,6 +209,11 @@ function App() {
             <div className="row">Message signed.</div>
           ) : null}
         </div>
+        {error && (
+          <div className="row" style={{ fontWeight: 'bold', color: '#aa0022' }}>
+            Error: {error.message}
+          </div>
+        )}
       </div>
     </main>
   );

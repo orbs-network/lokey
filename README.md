@@ -8,7 +8,8 @@ Additionally, LoKey uses the browser’s local storage to manage non-sensitive d
 
 ## Usage
 
-**Constructor**: `LoKey(appName: string)`
+### Constructor: `LoKey(appName: string)`
+
 Initialise a new instance of LoKey.
 
 Example:
@@ -27,7 +28,8 @@ const lokey = new LoKey('LoKey Example App');
 
 ---
 
-`createSigner(name: string, sessionExpiry?: number)`
+### `createSigner(name: string, sessionExpiry?: number)`
+
 Create a new signer and retrieve its public key.
 
 Example:
@@ -50,7 +52,8 @@ const publicKey = await lokey.createSigner(
 
 ---
 
-`deleteSigner(publicKey: string)`
+### `deleteSigner(publicKey: string)`
+
 Delete a signer using its public key.
 
 Example:
@@ -65,7 +68,8 @@ lokey.deleteSigner(publicKey);
 
 ---
 
-`getSigner(publicKey: string)`
+### `getSigner(publicKey: string)`
+
 Retrieve details of a specific signer.
 
 Example:
@@ -87,7 +91,8 @@ const { name, credentialId, publicKey } = await lokey.getSigner(publicKey);
 
 ---
 
-`getSigners()`
+### `getSigners()`
+
 Retrieve a list of all signers.
 
 Example:
@@ -102,7 +107,8 @@ const signers = await lokey.getSigners();
 
 ---
 
-`sign(publicKey: string, message: string)`
+### `sign(publicKey: string, message: string)`
+
 Sign a message using a signer’s private key.
 
 Example:
@@ -123,7 +129,8 @@ const { signature, data } = await lokey.sign(publicKey, message);
 
 ---
 
-`verify(publicKey: string, signature: string, data: string)`
+### `verify(publicKey: string, signature: string, data: string)`
+
 Verify a signed message using the public key.
 
 Example:

@@ -2,9 +2,9 @@
 
 ![LoKey](https://github.com/orbs-network/lokey/blob/main/src/images/lokey-logo2.png?raw=true)
 
-LoKey is a lightweight library using web native WebAuthn and Crypto APIs to authenticate and sign transactions with a private key stored securely in an enclave on the user's device for a browser session.
+LoKey is a lightweight library using web native WebAuthn and Crypto APIs to authenticate and sign transactions with a private key stored securely in an enclave on the user's device.
 
-LoKey also uses the browser's session storage to store insensitive data like the signer's public key.
+LoKey also uses the browser's local storage to store insensitive data like the signer's public key.
 
 ## Usage
 

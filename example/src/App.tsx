@@ -202,7 +202,7 @@ function App() {
           ) : null}
         </div>
         {error && (
-          <div className="row" style={{ fontWeight: 'bold', color: '#aa0022', width: '100%' }}>
+          <div className="row error" style={{ fontWeight: 'bold', width: '100%' }}>
             Error: {error.message}
           </div>
         )}

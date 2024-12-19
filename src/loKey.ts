@@ -81,7 +81,8 @@ export class LoKey {
           },
         ],
         authenticatorSelection: {
-          userVerification: 'required', // user verification required when creating a signer
+          userVerification: 'discouraged',
+          requireResidentKey: false,
         },
         timeout: 60000,
       },
@@ -137,9 +138,13 @@ export class LoKey {
           },
         ],
         timeout: 60000,
-        userVerification: 'preferred', // user verification preferred when signing but not required.
+        userVerification: 'discouraged',
       },
     });
+
+    if (!assertion) {
+      throw new Error('Signing failed.');
+    }
 
     const authAssertionResponse = (assertion as PublicKeyCredential)
       .response as AuthenticatorAssertionResponse;

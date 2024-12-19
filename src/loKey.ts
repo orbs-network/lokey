@@ -6,6 +6,13 @@ import {
   mergeBuffer,
 } from './utils';
 
+// TODO: new flow will be
+// 1. User registers on first time and creates passkey
+// 2. Then create a signing key - public key is stored locally and sent to server
+// 4. Passkey encrypts and stores signing key - try and find a way to keep it as non-extractable
+// 5. Signer is kept in memory and used when needed to sign messages
+// 6. When a new session starts, encrypted signing key is retrieved and decrypted with passkey then kept in memory for use with application
+
 export class LoKey {
   private _signers: LoKeySigner[] = [];
 

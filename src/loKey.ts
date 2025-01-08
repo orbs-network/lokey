@@ -1,11 +1,7 @@
 import { LoKeySignature, LoKeySigner, LoKeySignerDbItem } from './types';
 import { fromBase64, toBase64 } from './utils';
 
-// TODO: new flow will be
-// 1. Create a signing key - public key is stored locally and sent to server
-// 4. User password encrypts and stores signing key - try and find a way to keep it as non-extractable
-// 5. Signer is kept in memory and used when needed to sign messages
-// 6. When a new session starts, encrypted signing key is retrieved and decrypted with user password then kept in memory for use with application
+// TODO: Delete expired signers from IndexedDB
 
 export class LoKey {
   private _activeSigner: LoKeySigner | null = null;

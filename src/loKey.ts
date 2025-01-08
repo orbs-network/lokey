@@ -1,22 +1,16 @@
-import { LoKeySignature, LoKeySigner, LoKeyState } from './types';
-import {
-  convertEcdsaAsn1Signature,
-  convertFromBase64,
-  convertToBase64,
-  mergeBuffer,
-} from './utils';
+import { LoKeySignature, LoKeySigner, LoKeySignerDbItem } from './types';
+import { fromBase64, toBase64 } from './utils';
 
 // TODO: new flow will be
-// 1. User registers on first time and creates passkey
-// 2. Then create a signing key - public key is stored locally and sent to server
-// 4. Passkey encrypts and stores signing key - try and find a way to keep it as non-extractable
+// 1. Create a signing key - public key is stored locally and sent to server
+// 4. User password encrypts and stores signing key - try and find a way to keep it as non-extractable
 // 5. Signer is kept in memory and used when needed to sign messages
-// 6. When a new session starts, encrypted signing key is retrieved and decrypted with passkey then kept in memory for use with application
+// 6. When a new session starts, encrypted signing key is retrieved and decrypted with user password then kept in memory for use with application
 
 export class LoKey {
-  private _signers: LoKeySigner[] = [];
+  private _activeSigner: LoKeySigner | null = null;
 
-  constructor(private appName: string) {
+  constructor() {
     if (
       typeof globalThis.window === 'undefined' ||
       !(
@@ -26,158 +20,66 @@ export class LoKey {
     ) {
       throw new Error('LoKey can only be used in a browser environment.');
     }
+  }
 
-    const loKeyState = window.localStorage.getItem('loKeyState');
+  get activeSigner() {
+    return this._activeSigner;
+  }
 
-    if (!loKeyState) {
-      return;
+  async login(password: string, sessionExpiry = 0) {
+    let mainKey: LoKeySigner;
+
+    try {
+      const publicKey = window.localStorage.getItem('loKeySigner');
+      if (publicKey) {
+        const { signer, signerDbItem } = await this.loadKey(password, publicKey);
+        if (signer.sessionExpiry < Date.now()) {
+          // update session
+          await this.storeEncryptedKey({ ...signerDbItem, sessionExpiry });
+        }
+        mainKey = { ...signer, sessionExpiry };
+      } else {
+        throw new Error('No public key found, creating a new signer.');
+      }
+    } catch (error) {
+      console.warn('Failed to load existing signer, creating a new one:', error);
+      mainKey = await this.createSigner(password, 'main', sessionExpiry);
+      window.localStorage.setItem('loKeySigner', mainKey.publicKey);
     }
 
-    const { signers } = JSON.parse(loKeyState) as LoKeyState;
-    this.signers = signers;
+    this._activeSigner = mainKey;
   }
 
-  private get signers() {
-    return this._signers;
-  }
-
-  private set signers(signers: LoKeySigner[]) {
-    this._signers = signers;
-    window.localStorage.setItem('loKeyState', JSON.stringify({ signers: this._signers }));
-  }
-
-  private addSigner(signer: LoKeySigner) {
-    this.signers = [...this.signers, signer];
-  }
-
-  private pruneExpiredSigners() {
-    this.signers = this.signers.filter((s) => !s.sessionExpiry || s.sessionExpiry > Date.now());
-  }
-
-  getSigner(publicKey: string) {
-    this.pruneExpiredSigners();
-    return this.signers.find((s) => s.publicKey === publicKey);
-  }
-
-  getSigners() {
-    this.pruneExpiredSigners();
-    return this.signers;
-  }
-
-  async createSigner(name: string, sessionExpiry?: number) {
-    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
-
-    const randomUserId = window.crypto.getRandomValues(new Uint8Array(16));
-
-    const credential = await window.navigator.credentials.create({
-      publicKey: {
-        challenge,
-        rp: {
-          name: this.appName,
-          id: window.location.hostname,
-        },
-        user: {
-          id: randomUserId,
-          name,
-          displayName: name,
-        },
-        pubKeyCredParams: [
-          {
-            type: 'public-key',
-            alg: -7, // ECDSA w/ SHA-256
-          },
-        ],
-        authenticatorSelection: {
-          userVerification: 'discouraged',
-          requireResidentKey: false,
-        },
-        timeout: 60000,
-      },
-    });
-
-    if (!credential) {
-      throw new Error('Credential not created.');
+  async sign(message: string): Promise<LoKeySignature> {
+    if (!this._activeSigner) {
+      throw new Error('Signer not found.');
     }
 
-    const publicKey = (
-      (credential as PublicKeyCredential).response as AuthenticatorAttestationResponse
-    ).getPublicKey();
-
-    if (!publicKey) {
-      throw new Error('Credential has no public key.');
+    if (this._activeSigner.sessionExpiry !== 0 && this._activeSigner.sessionExpiry < Date.now()) {
+      this._activeSigner = null;
+      throw new Error('Signer expired.');
     }
 
-    const publicKeyBase64 = convertToBase64(publicKey);
+    const data = new TextEncoder().encode(message);
 
-    this.addSigner({
-      name,
-      credentialId: credential.id,
-      publicKey: publicKeyBase64,
-      sessionExpiry,
-    });
-
-    return publicKeyBase64;
-  }
-
-  deleteSigner(publicKey: string) {
-    this.signers = this.signers.filter((s) => s.publicKey !== publicKey);
-  }
-
-  async sign(publicKey: string, message: string): Promise<LoKeySignature> {
-    const signer = this.getSigner(publicKey);
-
-    if (!signer) {
-      throw new Error('Signer not found. Incorrect public key or signer has expired.');
-    }
-
-    const challenge = new TextEncoder().encode(message);
-
-    const assertion = await window.navigator.credentials.get({
-      publicKey: {
-        challenge,
-        allowCredentials: [
-          {
-            id: Uint8Array.from(
-              atob(signer.credentialId.replace(/_/g, '/').replace(/-/g, '+')),
-              (c) => c.charCodeAt(0)
-            ),
-            type: 'public-key',
-          },
-        ],
-        timeout: 60000,
-        userVerification: 'discouraged',
-      },
-    });
-
-    if (!assertion) {
-      throw new Error('Signing failed.');
-    }
-
-    const authAssertionResponse = (assertion as PublicKeyCredential)
-      .response as AuthenticatorAssertionResponse;
-
-    const signature = convertEcdsaAsn1Signature(new Uint8Array(authAssertionResponse.signature));
-
-    const hashedClientDataJSON = await window.crypto.subtle.digest(
-      'SHA-256',
-      authAssertionResponse.clientDataJSON
+    const signature = await crypto.subtle.sign(
+      { name: 'ECDSA', hash: { name: 'SHA-256' } },
+      this._activeSigner.privateKey,
+      data
     );
-    const data = mergeBuffer(authAssertionResponse.authenticatorData, hashedClientDataJSON);
 
     return {
-      signature: convertToBase64(signature),
-      data: convertToBase64(data),
+      signature: toBase64(signature),
+      data: toBase64(data),
     };
   }
 
-  async verify(publicKey: string, signature: string, data: string): Promise<boolean> {
-    const signer = this.getSigner(publicKey);
-
-    if (!signer) {
-      throw new Error('Signer not found. Incorrect public key or signer has expired.');
+  async verify(signature: string, data: string): Promise<boolean> {
+    if (!this._activeSigner) {
+      throw new Error('Signer not found.');
     }
 
-    const publicKeyBuffer = convertFromBase64(signer.publicKey);
+    const publicKeyBuffer = fromBase64(this._activeSigner.publicKey);
     const importedPublicKey = await window.crypto.subtle.importKey(
       'spki',
       publicKeyBuffer,
@@ -186,8 +88,8 @@ export class LoKey {
       ['verify']
     );
 
-    const signatureBuffer = convertFromBase64(signature);
-    const dataBuffer = convertFromBase64(data);
+    const signatureBuffer = fromBase64(signature);
+    const dataBuffer = fromBase64(data);
 
     // Verify the signature
     const isValid = await window.crypto.subtle.verify(
@@ -198,5 +100,165 @@ export class LoKey {
     );
 
     return isValid;
+  }
+
+  private async deriveEncryptionKey(password: string, salt: Uint8Array) {
+    const passwordKey = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(password),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveKey']
+    );
+
+    return await crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt,
+        iterations: 100000, // Adjust iterations for security vs performance
+        hash: 'SHA-256',
+      },
+      passwordKey,
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt']
+    );
+  }
+
+  private async exportAndEncryptPrivateKey(privateKey: CryptoKey, password: string) {
+    const salt = window.crypto.getRandomValues(new Uint8Array(16)); // Random salt
+    const encryptionKey = await this.deriveEncryptionKey(password, salt);
+
+    const privateKeyBuffer = await window.crypto.subtle.exportKey('pkcs8', privateKey);
+
+    const iv = window.crypto.getRandomValues(new Uint8Array(12)); // Initialization Vector
+    const encryptedPrivateKey = await window.crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      encryptionKey,
+      privateKeyBuffer
+    );
+
+    return {
+      encryptedPrivateKey: new Uint8Array(encryptedPrivateKey),
+      salt,
+      iv,
+    };
+  }
+
+  private async storeEncryptedKey(signer: LoKeySignerDbItem) {
+    const dbRequest = window.indexedDB.open('LoKeyDB', 1);
+
+    dbRequest.onupgradeneeded = () => {
+      const db = dbRequest.result;
+      db.createObjectStore('signers', { keyPath: 'publicKey' });
+    };
+
+    dbRequest.onsuccess = () => {
+      const db = dbRequest.result;
+      const store = db.transaction('signers', 'readwrite').objectStore('signers');
+
+      store.put(signer);
+    };
+  }
+
+  private async loadKey(password: string, publicKey: string) {
+    const dbRequest = window.indexedDB.open('LoKeyDB', 1);
+
+    return new Promise<{ signer: LoKeySigner; signerDbItem: LoKeySignerDbItem }>(
+      (resolve, reject) => {
+        dbRequest.onsuccess = async () => {
+          const db = dbRequest.result;
+          const store = db.transaction('signers', 'readonly').objectStore('signers');
+
+          const keyRequest = store.get(publicKey);
+
+          keyRequest.onsuccess = async () => {
+            if (!keyRequest.result) {
+              reject(new Error('Signer not found.'));
+              return;
+            }
+
+            const signerDbItem = keyRequest.result as LoKeySignerDbItem;
+
+            const encryptionKey = await this.deriveEncryptionKey(password, signerDbItem.salt);
+
+            try {
+              const decryptedPrivateKeyBuffer = await window.crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv: signerDbItem.iv },
+                encryptionKey,
+                signerDbItem.encryptedKey
+              );
+
+              const privateKey = await window.crypto.subtle.importKey(
+                'pkcs8',
+                decryptedPrivateKeyBuffer,
+                { name: 'ECDSA', namedCurve: 'P-256' },
+                true,
+                ['sign']
+              );
+
+              resolve({
+                signerDbItem,
+                signer: {
+                  name: signerDbItem.name,
+                  privateKey,
+                  publicKey: signerDbItem.publicKey,
+                  sessionExpiry: signerDbItem.sessionExpiry,
+                },
+              });
+            } catch (error) {
+              reject(new Error('Decryption failed: Invalid password or corrupted data'));
+            }
+          };
+
+          keyRequest.onerror = () => {
+            reject('Failed to retrieve key from IndexedDB');
+          };
+        };
+
+        dbRequest.onerror = () => {
+          reject('Failed to open IndexedDB');
+        };
+      }
+    );
+  }
+
+  private async createSigner(
+    password: string,
+    name: string,
+    sessionExpiry: number
+  ): Promise<LoKeySigner> {
+    const signerKey = await window.crypto.subtle.generateKey(
+      {
+        name: 'ECDSA',
+        namedCurve: 'P-256',
+      },
+      true,
+      ['sign', 'verify']
+    );
+
+    const { encryptedPrivateKey, iv, salt } = await this.exportAndEncryptPrivateKey(
+      signerKey.privateKey,
+      password
+    );
+
+    const pubKey = await window.crypto.subtle.exportKey('spki', signerKey.publicKey);
+    const publicKey = toBase64(pubKey);
+
+    await this.storeEncryptedKey({
+      publicKey,
+      name,
+      encryptedKey: encryptedPrivateKey,
+      salt,
+      iv,
+      sessionExpiry,
+    });
+
+    return {
+      name,
+      privateKey: signerKey.privateKey,
+      publicKey,
+      sessionExpiry,
+    };
   }
 }

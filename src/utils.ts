@@ -1,10 +1,10 @@
-export function convertToBase64(arrayBuffer: ArrayBuffer): string {
+export function toBase64(arrayBuffer: ArrayBuffer): string {
   const bytes = new Uint8Array(arrayBuffer);
   const binaryString = String.fromCharCode(...bytes);
   return btoa(binaryString);
 }
 
-export function convertFromBase64(base64: string): ArrayBuffer {
+export function fromBase64(base64: string): ArrayBuffer {
   const binaryString = atob(base64);
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {

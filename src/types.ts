@@ -1,18 +1,20 @@
 export type LoKeySigner = {
-  name: string;
-  credentialId: string;
-  // base64 encoded publicKey
   publicKey: string;
-  sessionExpiry?: number;
+  name: string;
+  privateKey: CryptoKey;
+  sessionExpiry: number;
 };
 
-export type LoKeyState = {
-  signers: LoKeySigner[];
+export type LoKeySignerDbItem = {
+  publicKey: string; // Used as id
+  name: string;
+  encryptedKey: Uint8Array;
+  salt: Uint8Array;
+  iv: Uint8Array;
+  sessionExpiry: number;
 };
 
 export type LoKeySignature = {
-  // base64 encoded signature
   signature: string;
-  // base64 encoded data
   data: string;
 };

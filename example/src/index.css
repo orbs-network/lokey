@@ -116,3 +116,7 @@ select {
 .success {
   color: #00b894;
 }
+
+.error {
+  color: #aa0022;
+}

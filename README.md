@@ -37,7 +37,7 @@ const lokey = new LoKey(async (payload) => {
 
 ---
 
-### `createSigner(name: string, sessionExpiry?: number)`
+### `createSigner()`
 
 Create a new signer.
 
@@ -54,7 +54,7 @@ const { address, signature } = await lokey.createSigner();
 
 ---
 
-### `sign(payload: any)`
+### `sign(payload: TypedData)`
 
 Sign a message using the LoKey signer.
 
@@ -66,7 +66,7 @@ const signature = await lokey.sign(payload);
 
 **Inputs**:
 
-- `payload` (any, required): Typed data according to EIP-712 standards.
+- `payload` (TypedData, required): Typed data according to EIP-712 standards.
 
 **Outputs**:
 

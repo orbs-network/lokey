@@ -8,7 +8,7 @@ export class LoKey {
   private worker: Worker;
   private callbacks: WorkerCallbacks = {};
 
-  constructor(private signTypedData: (payload: TypedData) => Promise<string>) {
+  constructor() {
     this.worker = new Worker(new URL('./loKeyWorker.ts', import.meta.url), {
       type: 'module',
     });
@@ -48,7 +48,9 @@ export class LoKey {
     });
   }
 
-  async createSigner(): Promise<{ address: string; signature: string }> {
+  async createSigner(
+    signTypedData: (payload: TypedData) => Promise<string>
+  ): Promise<{ address: string; signature: string }> {
     const result = await this.postCommand<{ address: string }>('generateKey');
 
     const payload = {
@@ -68,7 +70,7 @@ export class LoKey {
       },
     };
 
-    const signature = await this.signTypedData(payload);
+    const signature = await signTypedData(payload);
 
     return {
       address: result.address,

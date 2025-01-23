@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useLoKey } from './useLoKey';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { ethers } from 'ethers';
+import { useSignTypedData } from 'wagmi';
 
 function App() {
   const loKey = useLoKey();
@@ -12,13 +13,30 @@ function App() {
   const [isVerified, setVerified] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  const { signTypedDataAsync } = useSignTypedData();
+
   const handleGenerate = useCallback(async () => {
     if (!loKey) return;
-    const { address, signature } = await loKey.createSigner();
+    const { address, signature } = await loKey.createSigner(async (payload) => {
+      console.log('Signing typed data:', payload);
+
+      const typedData = {
+        ...payload,
+        domain: {
+          ...payload.domain,
+          name: payload.domain.name ?? undefined,
+          salt: (payload.domain.salt as `0x${string}`) ?? undefined,
+          verifyingContract: (payload.domain.verifyingContract as `0x${string}`) ?? undefined,
+          version: payload.domain.version ?? undefined,
+        },
+      };
+
+      return await signTypedDataAsync(typedData);
+    });
     // TODO: send signature to server
     console.log(address, signature);
     setLoKeyAddress(address);
-  }, [loKey]);
+  }, [loKey, signTypedDataAsync]);
 
   const handleSign = useCallback(async () => {
     if (!loKey) return;

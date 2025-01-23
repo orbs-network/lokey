@@ -88,9 +88,7 @@ This demonstrates how to integrate LoKey into a React application.
 
 ## Notes
 
-- LoKey leverages secure browser features like **WebAuthn** and **Subtle Crypto** for key management.
-- Non-sensitive data (e.g., public keys) is stored in local storage.
-- Session expiry can be used to enforce key expiration.
+- LoKey leverages secure browser features like **Web Workers** for key management.
 
 ## License
 

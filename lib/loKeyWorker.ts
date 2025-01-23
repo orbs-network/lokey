@@ -1,7 +1,6 @@
 import { Wallet, HDNodeWallet } from 'ethers';
 import { TypedData } from './types';
 
-// Make sure we declare "self" properly in TS
 declare const self: Worker;
 
 let ephemeralWallet: HDNodeWallet | null = null;
@@ -14,7 +13,6 @@ self.onmessage = async (event) => {
   try {
     switch (command) {
       case 'generateKey':
-        // Create a random secp256k1 wallet (private key stays here in the worker)
         ephemeralWallet = Wallet.createRandom();
         self.postMessage({
           id,
@@ -30,7 +28,6 @@ self.onmessage = async (event) => {
 
         const typedData = payload as TypedData;
 
-        // Sign the given message with the ephemeral private key
         const signature = await ephemeralWallet.signTypedData(
           typedData.domain,
           typedData.types,

@@ -1,20 +1,69 @@
-import { useMemo, useState } from 'react';
-import { LoKeySignature } from '@orbs-network/lokey';
+import { useCallback, useState } from 'react';
 import { useLoKey } from './useLoKey';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { ethers } from 'ethers';
 
 function App() {
   const loKey = useLoKey();
-  const [signature, setSignature] = useState<LoKeySignature | null>(null);
-  const [password, setPassword] = useState('');
-  const [isLoggedIn, setIsLoggedIn] = useState(!!loKey.activeSigner);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [loKeyAddress, setLoKeyAddress] = useState('');
+
   const [message, setMessage] = useState('');
   const [isVerified, setVerified] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const activeSigner = useMemo(() => {
-    setIsLoggedIn(!!loKey.activeSigner);
-    return loKey.activeSigner;
-  }, [loKey.activeSigner]);
+  const handleGenerate = useCallback(async () => {
+    if (!loKey) return;
+    const { address, signature } = await loKey.createSigner();
+    // TODO: send signature to server
+    console.log(address, signature);
+    setLoKeyAddress(address);
+  }, [loKey]);
+
+  const handleSign = useCallback(async () => {
+    if (!loKey) return;
+    const sig = await loKey.sign({
+      domain: {},
+      primaryType: 'Message',
+      types: {
+        Message: [{ name: 'message', type: 'string' }],
+      },
+      message: { message },
+    });
+    setSignature(sig);
+    console.log('Signature', sig);
+  }, [loKey, message]);
+
+  const handleVerify = useCallback(async () => {
+    if (!loKey || !signature || !loKeyAddress) return;
+    setVerified(false);
+
+    const typedData = {
+      domain: {},
+      primaryType: 'Message',
+      types: {
+        Message: [{ name: 'message', type: 'string' }],
+      },
+      message: { message },
+    };
+
+    try {
+      const res = ethers.verifyTypedData(
+        typedData.domain,
+        typedData.types,
+        typedData.message,
+        signature
+      );
+      console.log(res);
+      if (res !== loKeyAddress) {
+        throw new Error('Signature verification failed');
+      }
+      setVerified(res === loKeyAddress);
+    } catch (err) {
+      console.error(err);
+      setError(err as Error);
+    }
+  }, [loKey, loKeyAddress, message, signature]);
 
   return (
     <main>
@@ -23,47 +72,11 @@ function App() {
         <h1 style={{ fontWeight: 'normal' }}>LoKey</h1>
       </div>
       <div className="column" style={{ gap: 18 }}>
-        <div className="column">
-          {!isLoggedIn && (
-            <div className="column" style={{ gap: 2 }}>
-              <label>
-                <small>
-                  <strong>Login</strong>
-                </small>
-              </label>
-
-              <div className="row">
-                <input
-                  type="password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setError(null);
-                  }}
-                />
-                <button
-                  onClick={async () => {
-                    if (!password) {
-                      return;
-                    }
-
-                    try {
-                      await loKey.login(password, Date.now() + 60_000);
-                      setPassword('');
-                    } catch (err) {
-                      console.error(err);
-                      setError(err as Error);
-                      setPassword('');
-                    }
-                  }}
-                  disabled={!!activeSigner}
-                >
-                  Login
-                </button>
-              </div>
-            </div>
-          )}
+        <div className="row" style={{ justifyContent: 'center' }}>
+          <ConnectButton />
+          <button onClick={handleGenerate} disabled={Boolean(loKeyAddress)}>
+            Delegate
+          </button>
         </div>
 
         <div className="column">
@@ -87,41 +100,10 @@ function App() {
                   setError(null);
                 }}
               />
-              <button
-                onClick={async () => {
-                  setVerified(false);
-                  setSignature(null);
-                  if (!message || !activeSigner) {
-                    return;
-                  }
-
-                  try {
-                    const sig = await loKey.sign(message);
-                    setSignature(sig);
-                    console.log(sig);
-                  } catch (err) {
-                    setError(err as Error);
-                  }
-                }}
-                disabled={!message || !activeSigner}
-              >
+              <button onClick={handleSign} disabled={!message || !loKeyAddress}>
                 Sign
               </button>
-              <button
-                onClick={async () => {
-                  setVerified(false);
-                  if (!signature || !activeSigner) {
-                    return;
-                  }
-                  try {
-                    const verified = await loKey.verify(signature.signature, signature.data);
-                    setVerified(verified);
-                  } catch (err) {
-                    setError(err as Error);
-                  }
-                }}
-                disabled={!signature || !activeSigner}
-              >
+              <button onClick={handleVerify} disabled={!signature || !loKeyAddress}>
                 Verify
               </button>
               <button

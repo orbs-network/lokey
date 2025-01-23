@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { LoKey } from '../../lib';
+import { LoKey } from '../../dist/loKey.es';
 import { useSignTypedData } from 'wagmi';
 
 export function useLoKey() {

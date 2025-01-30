@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLoKey } from './useLoKey';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { ethers } from 'ethers';
@@ -83,6 +83,20 @@ function App() {
     }
   }, [loKey, loKeyAddress, message, signature]);
 
+  const init = useCallback(async () => {
+    if (!loKey) return;
+    try {
+      const address = await loKey.getAddress();
+      setLoKeyAddress(address || '');
+    } catch (e) {
+      console.log(e);
+    }
+  }, [loKey]);
+
+  useEffect(() => {
+    init();
+  }, [init]);
+
   return (
     <main>
       <div className="row" style={{ alignItems: 'center' }}>
@@ -94,6 +108,21 @@ function App() {
           <ConnectButton />
           <button onClick={handleGenerate} disabled={Boolean(loKeyAddress)}>
             Delegate
+          </button>
+        </div>
+
+        <div className="row" style={{ justifyContent: 'center', alignItems: 'center' }}>
+          <label style={{ fontSize: '14px' }}>LoKey address:</label>
+          <input style={{ fontSize: '12px' }} type="text" value={loKeyAddress} readOnly disabled />
+          <button
+            style={{ fontSize: '12px' }}
+            onClick={async () => {
+              await loKey.deleteKey();
+              await init();
+            }}
+            disabled={!loKeyAddress}
+          >
+            Delete key
           </button>
         </div>
 

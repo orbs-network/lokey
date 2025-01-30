@@ -25,6 +25,10 @@ export class LoKey {
         callback({ address });
       } else if (command === 'signComplete') {
         callback({ signature });
+      } else if (command === 'getAddressComplete') {
+        callback({ address });
+      } else if (command === 'deleteKeyComplete') {
+        callback(true);
       } else if (command === 'error') {
         callback({ error: new Error(message) });
       }
@@ -46,6 +50,11 @@ export class LoKey {
 
       this.worker.postMessage({ id: requestId, command, payload });
     });
+  }
+
+  async getAddress(): Promise<string | undefined> {
+    const result = await this.postCommand<{ address: string | undefined }>('getAddress');
+    return result.address;
   }
 
   async createSigner(
@@ -81,5 +90,9 @@ export class LoKey {
   async sign(payload: TypedData): Promise<string> {
     const result = await this.postCommand<{ signature: string }>('sign', payload);
     return result.signature;
+  }
+
+  async deleteKey(): Promise<void> {
+    await this.postCommand('deleteKey');
   }
 }

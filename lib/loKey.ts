@@ -1,3 +1,4 @@
+import LoKeyWorker from './loKeyWorker?worker&inline';
 import { TypedData } from './types';
 
 interface WorkerCallbacks {
@@ -9,9 +10,7 @@ export class LoKey {
   private callbacks: WorkerCallbacks = {};
 
   constructor() {
-    this.worker = new Worker(new URL('./loKeyWorker.ts', import.meta.url), {
-      type: 'module',
-    });
+    this.worker = new LoKeyWorker();
     this.worker.onmessage = (event) => {
       const { id, command, address, signature, message } = event.data;
       if (!id) {

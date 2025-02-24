@@ -91,7 +91,7 @@ export class LoKey {
     return result.signature;
   }
 
-  async deleteKey(): Promise<void> {
-    await this.postCommand('deleteKey');
+  async deleteKey(): Promise<boolean> {
+    return this.postCommand('deleteKey');
   }
 }

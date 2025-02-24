@@ -1,6 +1,6 @@
 {
   "name": "@orbs-network/lokey",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "LoKey is a lightweight library that leverages ethers.js to securely delegate a signer and sign messages without prompting the user for each siging operation.",
   "main": "./dist/loKey.umd.js",
   "module": "./dist/loKey.es.js",

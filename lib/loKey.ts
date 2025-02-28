@@ -12,7 +12,7 @@ export class LoKey {
   constructor() {
     this.worker = new LoKeyWorker();
     this.worker.onmessage = (event) => {
-      const { id, command, address, signature, message, isPersisted } = event.data;
+      const { id, command, address, signature, message } = event.data;
       if (!id) {
         console.warn('Received worker message without "id"', event.data);
         return;
@@ -23,14 +23,12 @@ export class LoKey {
       if (command === 'generateKeyComplete') {
         callback({ address });
       } else if (command === 'getAddressComplete') {
-        callback({ address, isPersisted });
+        callback({ address });
       } else if (command === 'deleteKeyComplete') {
         callback(true);
       } else if (command === 'persistKeyComplete') {
         callback(true);
-      } else if (command === 'signWithPersistedKeyComplete') {
-        callback({ signature });
-      } else if (command === 'signWithEphemeralKeyComplete') {
+      } else if (command === 'signComplete') {
         callback({ signature });
       } else if (command === 'error') {
         callback({ error: new Error(message) });
@@ -55,10 +53,9 @@ export class LoKey {
     });
   }
 
-  async getAddress(): Promise<{ address: string | undefined; isPersisted: boolean }> {
-    return await this.postCommand<{ address: string | undefined; isPersisted: boolean }>(
-      'getAddress'
-    );
+  async getAddress(): Promise<string | undefined> {
+    const result = await this.postCommand<{ address: string | undefined }>('getAddress');
+    return result.address;
   }
 
   async createSigner(
@@ -101,12 +98,7 @@ export class LoKey {
   }
 
   async sign(payload: TypedData): Promise<string> {
-    const { isPersisted } = await this.getAddress();
-
-    const result = await this.postCommand<{ signature: string }>(
-      isPersisted ? 'signWithPersistedKey' : 'signWithEphemeralKey',
-      payload
-    );
+    const result = await this.postCommand<{ signature: string }>('sign', payload);
     return result.signature;
   }
 

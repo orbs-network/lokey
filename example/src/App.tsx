@@ -88,7 +88,7 @@ function App() {
   const init = useCallback(async () => {
     if (!loKey) return;
     try {
-      const { address } = await loKey.getAddress();
+      const address = await loKey.getAddress();
       setLoKeyAddress(address || '');
     } catch (e) {
       console.log(e);

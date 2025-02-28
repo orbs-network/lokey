@@ -191,6 +191,26 @@ async function deleteEncryptedEthersKey(): Promise<void> {
   });
 }
 
+async function getPersistedWallet(): Promise<Wallet> {
+  const encryptionKey = await getAesKeyFromIDB();
+  if (!encryptionKey) {
+    throw new Error('No encryption key found');
+  }
+
+  const encryptedEthersKey = await getEncryptedEthersKey();
+  if (!encryptedEthersKey) {
+    throw new Error('No encrypted signing key found in IndexedDB!');
+  }
+
+  const privateKeyHex = await decryptWithAesKey(
+    encryptionKey,
+    encryptedEthersKey.iv,
+    encryptedEthersKey.ciphertext
+  );
+
+  return new ethers.Wallet(privateKeyHex);
+}
+
 async function sign(wallet: HDNodeWallet | Wallet, typedData: TypedData) {
   return await wallet.signTypedData(typedData.domain, typedData.types, typedData.message);
 }
@@ -206,7 +226,6 @@ self.onmessage = async (event) => {
             id,
             command: 'getAddressComplete',
             address: ephemeralWallet.address,
-            isPersisted: false,
           });
 
           return;
@@ -217,15 +236,15 @@ self.onmessage = async (event) => {
           id,
           command: 'getAddressComplete',
           address: encryptedEthersKey?.address,
-          isPersisted: true,
         });
 
         break;
       }
       case 'deleteKey': {
+        ephemeralWallet = null;
         await deleteAesKeyInIDB();
         await deleteEncryptedEthersKey();
-        ephemeralWallet = null;
+
         self.postMessage({
           id,
           command: 'deleteKeyComplete',
@@ -271,8 +290,6 @@ self.onmessage = async (event) => {
         await storeEncryptedEthersKey(ephemeralWallet.address, encryptedEthersKey);
         await storeAesKeyInIDB(encryptionKey);
 
-        ephemeralWallet = null;
-
         self.postMessage({
           id,
           command: 'persistKeyComplete',
@@ -280,44 +297,18 @@ self.onmessage = async (event) => {
 
         break;
       }
-      case 'signWithPersistedKey': {
-        const encryptionKey = await getAesKeyFromIDB();
-        if (!encryptionKey) {
-          throw new Error('No encryption key found');
+      case 'sign': {
+        let wallet: HDNodeWallet | Wallet | null = ephemeralWallet;
+
+        if (!wallet) {
+          wallet = await getPersistedWallet();
         }
 
-        const encryptedEthersKey = await getEncryptedEthersKey();
-        if (!encryptedEthersKey) {
-          throw new Error('No encrypted Ethers key found in IndexedDB!');
-        }
-
-        const privateKeyHex = await decryptWithAesKey(
-          encryptionKey,
-          encryptedEthersKey.iv,
-          encryptedEthersKey.ciphertext
-        );
-
-        // 4) Reconstruct Ethers wallet
-        const wallet = new ethers.Wallet(privateKeyHex);
         const signature = await sign(wallet, payload as TypedData);
 
         self.postMessage({
           id,
-          command: 'signWithPersistedKeyComplete',
-          signature,
-        });
-        break;
-      }
-      case 'signWithEphemeralKey': {
-        if (!ephemeralWallet) {
-          throw new Error('No ephemeral wallet generated');
-        }
-
-        const signature = await sign(ephemeralWallet, payload as TypedData);
-
-        self.postMessage({
-          id,
-          command: 'signWithEphemeralKeyComplete',
+          command: 'signComplete',
           signature,
         });
         break;

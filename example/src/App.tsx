@@ -13,6 +13,8 @@ function App() {
   const [isVerified, setVerified] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  const [persistKey, setPersistKey] = useState(false);
+
   const { signTypedDataAsync } = useSignTypedData();
 
   const handleGenerate = useCallback(async () => {
@@ -32,11 +34,11 @@ function App() {
       };
 
       return await signTypedDataAsync(typedData);
-    });
+    }, persistKey);
     // TODO: send signature to server
     console.log(address, signature);
     setLoKeyAddress(address);
-  }, [loKey, signTypedDataAsync]);
+  }, [loKey, persistKey, signTypedDataAsync]);
 
   const handleSign = useCallback(async () => {
     if (!loKey) return;
@@ -86,7 +88,7 @@ function App() {
   const init = useCallback(async () => {
     if (!loKey) return;
     try {
-      const address = await loKey.getAddress();
+      const { address } = await loKey.getAddress();
       setLoKeyAddress(address || '');
     } catch (e) {
       console.log(e);
@@ -104,8 +106,21 @@ function App() {
         <h1 style={{ fontWeight: 'normal' }}>LoKey</h1>
       </div>
       <div className="column" style={{ gap: 18 }}>
-        <div className="row" style={{ justifyContent: 'center' }}>
+        <div className="row" style={{ justifyContent: 'end' }}>
           <ConnectButton />
+        </div>
+        <div className="row" style={{ justifyContent: 'center', alignItems: 'center' }}>
+          <div>
+            <label>
+              <input
+                type="checkbox"
+                checked={persistKey}
+                onChange={(e) => setPersistKey(e.target.checked)}
+                style={{ marginRight: 8 }}
+              />
+              Persist key
+            </label>
+          </div>
           <button onClick={handleGenerate} disabled={Boolean(loKeyAddress)}>
             Delegate
           </button>
@@ -117,8 +132,10 @@ function App() {
           <button
             style={{ fontSize: '12px' }}
             onClick={async () => {
-              await loKey.deleteKey();
-              await init();
+              const success = await loKey.deleteKey();
+              if (success) {
+                await init();
+              }
             }}
             disabled={!loKeyAddress}
           >

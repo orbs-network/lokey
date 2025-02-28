@@ -1,10 +1,12 @@
-import { ethers, Wallet } from 'ethers';
+import { ethers, HDNodeWallet, Wallet } from 'ethers';
 import { TypedData } from './types';
 import { arrayBufferToBase64, base64ToUint8Array } from './utils';
 
 declare const self: Worker;
 
 console.log('LoKey worker started');
+
+let ephemeralWallet: HDNodeWallet | null = null;
 
 async function encryptWithAesKey(aesKey: CryptoKey, privateKeyHex: string) {
   // Convert hex string to bytes
@@ -189,23 +191,41 @@ async function deleteEncryptedEthersKey(): Promise<void> {
   });
 }
 
+async function sign(wallet: HDNodeWallet | Wallet, typedData: TypedData) {
+  return await wallet.signTypedData(typedData.domain, typedData.types, typedData.message);
+}
+
 self.onmessage = async (event) => {
   const { id, command, payload } = event.data;
 
   try {
     switch (command) {
       case 'getAddress': {
+        if (ephemeralWallet) {
+          self.postMessage({
+            id,
+            command: 'getAddressComplete',
+            address: ephemeralWallet.address,
+            isPersisted: false,
+          });
+
+          return;
+        }
+
         const encryptedEthersKey = await getEncryptedEthersKey();
         self.postMessage({
           id,
           command: 'getAddressComplete',
           address: encryptedEthersKey?.address,
+          isPersisted: true,
         });
+
         break;
       }
       case 'deleteKey': {
         await deleteAesKeyInIDB();
         await deleteEncryptedEthersKey();
+        ephemeralWallet = null;
         self.postMessage({
           id,
           command: 'deleteKeyComplete',
@@ -213,7 +233,29 @@ self.onmessage = async (event) => {
         break;
       }
       case 'generateKey': {
-        const ephemeralWallet = Wallet.createRandom();
+        if (ephemeralWallet) {
+          throw new Error('Ephemeral wallet already exists');
+        }
+
+        const encryptedEthersKey = await getEncryptedEthersKey();
+        if (encryptedEthersKey) {
+          throw new Error('Delegated key already exists');
+        }
+
+        ephemeralWallet = ethers.Wallet.createRandom();
+
+        self.postMessage({
+          id,
+          command: 'generateKeyComplete',
+          address: ephemeralWallet.address,
+        });
+
+        break;
+      }
+      case 'persistKey': {
+        if (!ephemeralWallet) {
+          throw new Error('No ephemeral wallet generated');
+        }
 
         const encryptionKey = await crypto.subtle.generateKey(
           { name: 'AES-GCM', length: 256 },
@@ -229,15 +271,16 @@ self.onmessage = async (event) => {
         await storeEncryptedEthersKey(ephemeralWallet.address, encryptedEthersKey);
         await storeAesKeyInIDB(encryptionKey);
 
+        ephemeralWallet = null;
+
         self.postMessage({
           id,
-          command: 'generateKeyComplete',
-          address: ephemeralWallet.address,
+          command: 'persistKeyComplete',
         });
 
         break;
       }
-      case 'sign': {
+      case 'signWithPersistedKey': {
         const encryptionKey = await getAesKeyFromIDB();
         if (!encryptionKey) {
           throw new Error('No encryption key found');
@@ -256,17 +299,25 @@ self.onmessage = async (event) => {
 
         // 4) Reconstruct Ethers wallet
         const wallet = new ethers.Wallet(privateKeyHex);
+        const signature = await sign(wallet, payload as TypedData);
 
-        const typedData = payload as TypedData;
-
-        const signature = await wallet.signTypedData(
-          typedData.domain,
-          typedData.types,
-          typedData.message
-        );
         self.postMessage({
           id,
-          command: 'signComplete',
+          command: 'signWithPersistedKeyComplete',
+          signature,
+        });
+        break;
+      }
+      case 'signWithEphemeralKey': {
+        if (!ephemeralWallet) {
+          throw new Error('No ephemeral wallet generated');
+        }
+
+        const signature = await sign(ephemeralWallet, payload as TypedData);
+
+        self.postMessage({
+          id,
+          command: 'signWithEphemeralKeyComplete',
           signature,
         });
         break;

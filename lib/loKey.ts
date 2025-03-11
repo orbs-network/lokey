@@ -58,43 +58,13 @@ export class LoKey {
     return result.address;
   }
 
-  async createSigner(
-    signTypedData: (payload: TypedData) => Promise<string>,
-    persistKey = false
-  ): Promise<{ address: string; signature: string }> {
-    const result = await this.postCommand<{ address: string }>('generateKey');
+  async createSigner(): Promise<string> {
+    const { address } = await this.postCommand<{ address: string }>('generateKey');
+    return address;
+  }
 
-    const payload = {
-      primaryType: 'Verification',
-      domain: {},
-      types: {
-        Verification: [
-          { name: 'address', type: 'address' },
-          { name: 'message', type: 'string' },
-          { name: 'nonce', type: 'uint256' },
-        ],
-      },
-      message: {
-        address: result.address,
-        message: 'Sign this message to prove you own the private key.',
-        nonce: Date.now(),
-      },
-    };
-
-    const signature = await signTypedData(payload);
-
-    if (!signature) {
-      throw new Error('Failed to sign message');
-    }
-
-    if (persistKey) {
-      await this.postCommand('persistKey');
-    }
-
-    return {
-      address: result.address,
-      signature,
-    };
+  async persistKey(): Promise<boolean> {
+    return this.postCommand('persistKey');
   }
 
   async sign(payload: TypedData): Promise<string> {

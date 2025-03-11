@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLoKey } from './useLoKey';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { ethers } from 'ethers';
 import { useSignTypedData } from 'wagmi';
+import { verifyTypedData } from 'viem';
 
 function App() {
   const loKey = useLoKey();
@@ -19,23 +19,28 @@ function App() {
 
   const handleGenerate = useCallback(async () => {
     if (!loKey) return;
-    const { address, signature } = await loKey.createSigner(async (payload) => {
-      console.log('Signing typed data:', payload);
+    const address = await loKey.createSigner();
 
-      const typedData = {
-        ...payload,
-        domain: {
-          ...payload.domain,
-          name: payload.domain.name ?? undefined,
-          salt: (payload.domain.salt as `0x${string}`) ?? undefined,
-          verifyingContract: (payload.domain.verifyingContract as `0x${string}`) ?? undefined,
-          version: payload.domain.version ?? undefined,
-        },
-      };
+    const typedData = {
+      domain: {
+        name: 'LoKey Example',
+        verifyingContract: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+        version: '1',
+        chainId: 1,
+      },
+      types: {
+        Message: [{ name: 'message', type: 'string' }],
+      },
+      primaryType: 'Message' as const,
+      message: { message: 'Delegate a signer' },
+    };
 
-      return await signTypedDataAsync(typedData);
-    }, persistKey);
-    // TODO: send signature to server
+    const signature = await signTypedDataAsync(typedData);
+
+    if (persistKey) {
+      await loKey.persistKey();
+    }
+
     console.log(address, signature);
     setLoKeyAddress(address);
   }, [loKey, persistKey, signTypedDataAsync]);
@@ -68,17 +73,20 @@ function App() {
     };
 
     try {
-      const res = ethers.verifyTypedData(
-        typedData.domain,
-        typedData.types,
-        typedData.message,
-        signature
-      );
+      const res = await verifyTypedData({
+        domain: typedData.domain,
+        primaryType: typedData.primaryType as 'Message',
+        types: typedData.types,
+        message: typedData.message,
+        signature: signature as `0x${string}`,
+        address: loKeyAddress as `0x${string}`,
+      });
+
       console.log(res);
-      if (res !== loKeyAddress) {
+      if (!res) {
         throw new Error('Signature verification failed');
       }
-      setVerified(res === loKeyAddress);
+      setVerified(res);
     } catch (err) {
       console.error(err);
       setError(err as Error);

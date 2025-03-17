@@ -53,26 +53,26 @@ export class LoKey {
     });
   }
 
-  async getAddress(): Promise<string | undefined> {
-    const result = await this.postCommand<{ address: string | undefined }>('getAddress');
+  async getAddress(id: string): Promise<string | undefined> {
+    const result = await this.postCommand<{ address: string | undefined }>('getAddress', { id });
     return result.address;
   }
 
-  async createSigner(): Promise<string> {
-    const { address } = await this.postCommand<{ address: string }>('generateKey');
+  async createSigner(id: string): Promise<string> {
+    const { address } = await this.postCommand<{ address: string }>('generateKey', { id });
     return address;
   }
 
-  async persistKey(): Promise<boolean> {
-    return this.postCommand('persistKey');
+  async persistKey(id: string): Promise<boolean> {
+    return this.postCommand('persistKey', { id });
   }
 
-  async sign(payload: TypedData): Promise<string> {
-    const result = await this.postCommand<{ signature: string }>('sign', payload);
+  async sign(id: string, payload: TypedData): Promise<string> {
+    const result = await this.postCommand<{ signature: string }>('sign', { id, ...payload });
     return result.signature;
   }
 
-  async deleteKey(): Promise<boolean> {
-    return this.postCommand('deleteKey');
+  async deleteKey(id: string): Promise<boolean> {
+    return this.postCommand('deleteKey', { id });
   }
 }

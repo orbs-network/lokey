@@ -7,47 +7,48 @@ import { verifyTypedData } from 'viem';
 function App() {
   const loKey = useLoKey();
   const [signature, setSignature] = useState<string | null>(null);
+  const [id, setId] = useState('');
   const [loKeyAddress, setLoKeyAddress] = useState('');
 
   const [message, setMessage] = useState('');
   const [isVerified, setVerified] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const [persistKey, setPersistKey] = useState(false);
-
   const { signTypedDataAsync } = useSignTypedData();
 
   const handleGenerate = useCallback(async () => {
-    if (!loKey) return;
-    const address = await loKey.createSigner();
+    if (!loKey || !id) return;
 
-    const typedData = {
-      domain: {
-        name: 'LoKey Example',
-        verifyingContract: '0x0000000000000000000000000000000000000000' as `0x${string}`,
-        version: '1',
-        chainId: 1,
-      },
-      types: {
-        Message: [{ name: 'message', type: 'string' }],
-      },
-      primaryType: 'Message' as const,
-      message: { message: 'Delegate a signer' },
-    };
+    try {
+      const address = await loKey.createSigner(id);
 
-    const signature = await signTypedDataAsync(typedData);
+      const typedData = {
+        domain: {
+          name: 'LoKey Example',
+          verifyingContract: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+          version: '1',
+          chainId: 1,
+        },
+        types: {
+          Message: [{ name: 'message', type: 'string' }],
+        },
+        primaryType: 'Message' as const,
+        message: { message: 'Delegate a signer' },
+      };
 
-    if (persistKey) {
-      await loKey.persistKey();
+      const signature = await signTypedDataAsync(typedData);
+
+      console.log(address, signature);
+      setLoKeyAddress(address);
+    } catch (err) {
+      console.error(err);
+      setError(err as Error);
     }
-
-    console.log(address, signature);
-    setLoKeyAddress(address);
-  }, [loKey, persistKey, signTypedDataAsync]);
+  }, [id, loKey, signTypedDataAsync]);
 
   const handleSign = useCallback(async () => {
     if (!loKey) return;
-    const sig = await loKey.sign({
+    const sig = await loKey.sign(id, {
       domain: {},
       primaryType: 'Message',
       types: {
@@ -57,7 +58,7 @@ function App() {
     });
     setSignature(sig);
     console.log('Signature', sig);
-  }, [loKey, message]);
+  }, [id, loKey, message]);
 
   const handleVerify = useCallback(async () => {
     if (!loKey || !signature || !loKeyAddress) return;
@@ -96,12 +97,12 @@ function App() {
   const init = useCallback(async () => {
     if (!loKey) return;
     try {
-      const address = await loKey.getAddress();
+      const address = await loKey.getAddress(id);
       setLoKeyAddress(address || '');
     } catch (e) {
       console.log(e);
     }
-  }, [loKey]);
+  }, [id, loKey]);
 
   useEffect(() => {
     init();
@@ -117,30 +118,40 @@ function App() {
         <div className="row" style={{ justifyContent: 'end' }}>
           <ConnectButton />
         </div>
-        <div className="row" style={{ justifyContent: 'center', alignItems: 'center' }}>
-          <div>
-            <label>
-              <input
-                type="checkbox"
-                checked={persistKey}
-                onChange={(e) => setPersistKey(e.target.checked)}
-                style={{ marginRight: 8 }}
-              />
-              Persist key
-            </label>
-          </div>
+        <div className="row" style={{ alignItems: 'center' }}>
+          <input
+            type="text"
+            placeholder="Delegate ID"
+            style={{ fontSize: '12px' }}
+            value={id}
+            onChange={(e) => {
+              setId(e.target.value);
+            }}
+          />
+
           <button onClick={handleGenerate} disabled={Boolean(loKeyAddress)}>
             Delegate
           </button>
         </div>
 
         <div className="row" style={{ justifyContent: 'center', alignItems: 'center' }}>
-          <label style={{ fontSize: '14px' }}>LoKey address:</label>
           <input style={{ fontSize: '12px' }} type="text" value={loKeyAddress} readOnly disabled />
           <button
             style={{ fontSize: '12px' }}
             onClick={async () => {
-              const success = await loKey.deleteKey();
+              const success = await loKey.persistKey(id);
+              if (!success) {
+                setError(new Error('Failed to persist key'));
+              }
+            }}
+            disabled={!loKeyAddress}
+          >
+            Persist key
+          </button>
+          <button
+            style={{ fontSize: '12px' }}
+            onClick={async () => {
+              const success = await loKey.deleteKey(id);
               if (success) {
                 await init();
               }
@@ -153,7 +164,7 @@ function App() {
 
         <div className="column">
           <div className="column" style={{ gap: 2 }}>
-            <label>
+            <label style={{ fontSize: '12px' }}>
               <small>
                 <strong>Enter message</strong>
               </small>

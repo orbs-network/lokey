@@ -6,7 +6,7 @@ declare const self: Worker;
 
 console.log('LoKey worker started');
 
-let ephemeralWallet: HDNodeWallet | null = null;
+const ephemeralWallets: Record<string, HDNodeWallet> = {};
 
 async function encryptWithAesKey(aesKey: CryptoKey, privateKeyHex: string) {
   // Convert hex string to bytes
@@ -52,9 +52,6 @@ const DB_NAME = 'LoKeyDB';
 const AES_STORE = 'aesKeyStore';
 const ETHERS_STORE = 'ethersKeyStore';
 
-const AES_KEY_ID = 'aes-gcm-key'; // For storing the non-extractable AES key
-const ETHERS_KEY_ID = 'encrypted-ethers'; // For storing the encrypted Ethers key
-
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const openRequest = indexedDB.open(DB_NAME, 1);
@@ -80,26 +77,26 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-async function storeAesKeyInIDB(aesKey: CryptoKey): Promise<void> {
+async function storeAesKeyInIDB(id: string, aesKey: CryptoKey): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(AES_STORE, 'readwrite');
     const store = tx.objectStore(AES_STORE);
 
-    store.put({ id: AES_KEY_ID, key: aesKey });
+    store.add({ id, key: aesKey });
 
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
-async function getAesKeyFromIDB(): Promise<CryptoKey | null> {
+async function getAesKeyFromIDB(id: string): Promise<CryptoKey | null> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(AES_STORE, 'readonly');
     const store = tx.objectStore(AES_STORE);
 
-    const getRequest = store.get(AES_KEY_ID);
+    const getRequest = store.get(id);
     getRequest.onsuccess = () => {
       if (!getRequest.result) {
         return resolve(null);
@@ -111,13 +108,13 @@ async function getAesKeyFromIDB(): Promise<CryptoKey | null> {
   });
 }
 
-async function deleteAesKeyInIDB(): Promise<void> {
+async function deleteAesKeyInIDB(id: string): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(AES_STORE, 'readwrite');
     const store = tx.objectStore(AES_STORE);
 
-    store.delete(AES_KEY_ID);
+    store.delete(id);
 
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -132,6 +129,7 @@ interface EncryptedEthersKey {
 }
 
 async function storeEncryptedEthersKey(
+  id: string,
   address: string,
   encryptedData: {
     iv: string;
@@ -144,19 +142,19 @@ async function storeEncryptedEthersKey(
     const store = tx.objectStore(ETHERS_STORE);
 
     const record: EncryptedEthersKey = {
-      id: ETHERS_KEY_ID,
+      id,
       address,
       iv: encryptedData.iv,
       ciphertext: encryptedData.ciphertext,
     };
-    store.put(record);
+    store.add(record);
 
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
-async function getEncryptedEthersKey(): Promise<{
+async function getEncryptedEthersKey(id: string): Promise<{
   iv: string;
   ciphertext: string;
   address: string;
@@ -166,7 +164,7 @@ async function getEncryptedEthersKey(): Promise<{
     const tx = db.transaction(ETHERS_STORE, 'readonly');
     const store = tx.objectStore(ETHERS_STORE);
 
-    const getRequest = store.get(ETHERS_KEY_ID);
+    const getRequest = store.get(id);
     getRequest.onsuccess = () => {
       if (!getRequest.result) {
         return resolve(null);
@@ -178,26 +176,26 @@ async function getEncryptedEthersKey(): Promise<{
   });
 }
 
-async function deleteEncryptedEthersKey(): Promise<void> {
+async function deleteEncryptedEthersKey(id: string): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(ETHERS_STORE, 'readwrite');
     const store = tx.objectStore(ETHERS_STORE);
 
-    store.delete(ETHERS_KEY_ID);
+    store.delete(id);
 
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
-async function getPersistedWallet(): Promise<Wallet> {
-  const encryptionKey = await getAesKeyFromIDB();
+async function getPersistedWallet(id: string): Promise<Wallet> {
+  const encryptionKey = await getAesKeyFromIDB(id);
   if (!encryptionKey) {
     throw new Error('No encryption key found');
   }
 
-  const encryptedEthersKey = await getEncryptedEthersKey();
+  const encryptedEthersKey = await getEncryptedEthersKey(id);
   if (!encryptedEthersKey) {
     throw new Error('No encrypted signing key found in IndexedDB!');
   }
@@ -216,14 +214,15 @@ async function sign(wallet: HDNodeWallet | Wallet, typedData: TypedData) {
 }
 
 self.onmessage = async (event) => {
-  const { id, command, payload } = event.data;
+  const { id: eventId, command, payload } = event.data;
 
   try {
     switch (command) {
       case 'getAddress': {
+        const ephemeralWallet = ephemeralWallets[payload.id];
         if (ephemeralWallet) {
           self.postMessage({
-            id,
+            id: eventId,
             command: 'getAddressComplete',
             address: ephemeralWallet.address,
           });
@@ -231,9 +230,9 @@ self.onmessage = async (event) => {
           return;
         }
 
-        const encryptedEthersKey = await getEncryptedEthersKey();
+        const encryptedEthersKey = await getEncryptedEthersKey(payload.id);
         self.postMessage({
-          id,
+          id: eventId,
           command: 'getAddressComplete',
           address: encryptedEthersKey?.address,
         });
@@ -241,38 +240,33 @@ self.onmessage = async (event) => {
         break;
       }
       case 'deleteKey': {
-        ephemeralWallet = null;
-        await deleteAesKeyInIDB();
-        await deleteEncryptedEthersKey();
+        delete ephemeralWallets[payload.id];
+        await deleteAesKeyInIDB(payload.id);
+        await deleteEncryptedEthersKey(payload.id);
 
         self.postMessage({
-          id,
+          id: eventId,
           command: 'deleteKeyComplete',
         });
         break;
       }
       case 'generateKey': {
-        if (ephemeralWallet) {
+        if (ephemeralWallets[payload.id]) {
           throw new Error('Ephemeral wallet already exists');
         }
 
-        const encryptedEthersKey = await getEncryptedEthersKey();
-        if (encryptedEthersKey) {
-          throw new Error('Delegated key already exists');
-        }
-
-        ephemeralWallet = ethers.Wallet.createRandom();
+        ephemeralWallets[payload.id] = ethers.Wallet.createRandom();
 
         self.postMessage({
-          id,
+          id: eventId,
           command: 'generateKeyComplete',
-          address: ephemeralWallet.address,
+          address: ephemeralWallets[payload.id].address,
         });
 
         break;
       }
       case 'persistKey': {
-        if (!ephemeralWallet) {
+        if (!ephemeralWallets[payload.id]) {
           throw new Error('No ephemeral wallet generated');
         }
 
@@ -284,30 +278,36 @@ self.onmessage = async (event) => {
 
         const encryptedEthersKey = await encryptWithAesKey(
           encryptionKey,
-          ephemeralWallet.privateKey
+          ephemeralWallets[payload.id].privateKey
         );
 
-        await storeEncryptedEthersKey(ephemeralWallet.address, encryptedEthersKey);
-        await storeAesKeyInIDB(encryptionKey);
+        await storeEncryptedEthersKey(
+          payload.id,
+          ephemeralWallets[payload.id].address,
+          encryptedEthersKey
+        );
+        await storeAesKeyInIDB(payload.id, encryptionKey);
 
         self.postMessage({
-          id,
+          id: eventId,
           command: 'persistKeyComplete',
         });
 
         break;
       }
       case 'sign': {
-        let wallet: HDNodeWallet | Wallet | null = ephemeralWallet;
+        let wallet: HDNodeWallet | Wallet | undefined = ephemeralWallets[payload.id];
+
+        const { id, ...typedData } = payload;
 
         if (!wallet) {
-          wallet = await getPersistedWallet();
+          wallet = await getPersistedWallet(id);
         }
 
-        const signature = await sign(wallet, payload as TypedData);
+        const signature = await sign(wallet, typedData as TypedData);
 
         self.postMessage({
-          id,
+          id: eventId,
           command: 'signComplete',
           signature,
         });
@@ -318,7 +318,7 @@ self.onmessage = async (event) => {
     }
   } catch (err: any) {
     self.postMessage({
-      id,
+      id: eventId,
       command: 'error',
       message: err?.message || String(err),
     });

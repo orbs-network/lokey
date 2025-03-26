@@ -83,7 +83,7 @@ async function storeAesKeyInIDB(id: string, aesKey: CryptoKey): Promise<void> {
     const tx = db.transaction(AES_STORE, 'readwrite');
     const store = tx.objectStore(AES_STORE);
 
-    store.add({ id, key: aesKey });
+    store.put({ id, key: aesKey });
 
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -147,7 +147,7 @@ async function storeEncryptedEthersKey(
       iv: encryptedData.iv,
       ciphertext: encryptedData.ciphertext,
     };
-    store.add(record);
+    store.put(record);
 
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);

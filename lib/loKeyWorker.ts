@@ -317,10 +317,12 @@ self.onmessage = async (event) => {
         throw new Error('Unknown command: ' + command);
     }
   } catch (err: any) {
+    console.error('LoKey worker error:', err);
     self.postMessage({
       id: eventId,
       command: 'error',
       message: err?.message || String(err),
+      stack: err?.stack,
     });
   }
 };

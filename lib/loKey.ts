@@ -9,7 +9,7 @@ export class LoKey {
   private worker: Worker;
   private callbacks: WorkerCallbacks = {};
 
-  constructor() {
+  constructor(opts: { debug?: boolean } = {}) {
     this.worker = new LoKeyWorker();
     this.worker.onmessage = (event) => {
       const { id, command, address, signature, message } = event.data;
@@ -36,6 +36,8 @@ export class LoKey {
 
       delete this.callbacks[id];
     };
+
+    this.worker.postMessage({ command: 'setDebug', payload: { enabled: opts.debug } });
   }
 
   private postCommand<T>(command: string, payload?: any): Promise<T> {

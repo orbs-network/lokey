@@ -4,7 +4,23 @@ import { arrayBufferToBase64, base64ToUint8Array } from './utils';
 
 declare const self: Worker;
 
-console.log('LoKey worker started');
+// Debug flag - can be toggled via a message to the worker
+let DEBUG_ENABLED = false;
+
+// Logger utility that only logs when debugging is enabled
+function log(...args: any[]) {
+  if (DEBUG_ENABLED) {
+    console.log('[LoKeyWorker]', ...args);
+  }
+}
+
+function logError(...args: any[]) {
+  if (DEBUG_ENABLED) {
+    console.error('[LoKeyWorker]', ...args);
+  }
+}
+
+log('LoKey worker started');
 
 const ephemeralWallets: Record<string, HDNodeWallet> = {};
 
@@ -54,40 +70,75 @@ const ETHERS_STORE = 'ethersKeyStore';
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
+    log('Opening IndexedDB database:', DB_NAME);
     const openRequest = indexedDB.open(DB_NAME, 1);
 
     openRequest.onupgradeneeded = (event) => {
-      console.log('Creating object stores');
+      log('Database upgrade needed, creating object stores');
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(AES_STORE)) {
+        log('Creating AES_STORE object store');
         db.createObjectStore(AES_STORE, { keyPath: 'id' });
       }
-      // If you also have an ETHERS_STORE or others, create them here too:
       if (!db.objectStoreNames.contains(ETHERS_STORE)) {
+        log('Creating ETHERS_STORE object store');
         db.createObjectStore(ETHERS_STORE, { keyPath: 'id' });
       }
     };
 
     openRequest.onsuccess = () => {
+      log('IndexedDB opened successfully');
       resolve(openRequest.result);
     };
-    openRequest.onerror = () => {
-      reject(openRequest.error);
+
+    openRequest.onerror = (event) => {
+      const error = openRequest.error;
+      logError('Error opening IndexedDB:', error);
+      logError('Error event:', event);
+      reject(error || new Error('Unknown error opening IndexedDB'));
+    };
+
+    openRequest.onblocked = (event) => {
+      logError('IndexedDB open request blocked:', event);
+      reject(new Error('IndexedDB open request blocked'));
     };
   });
 }
 
 async function storeAesKeyInIDB(id: string, aesKey: CryptoKey): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(AES_STORE, 'readwrite');
-    const store = tx.objectStore(AES_STORE);
+  try {
+    log('Opening IndexedDB for AES key storage');
+    const db = await openDB();
+    log('IndexedDB opened successfully');
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(AES_STORE, 'readwrite');
+      const store = tx.objectStore(AES_STORE);
 
-    store.put({ id, key: aesKey });
+      log('Putting AES key in object store');
+      const request = store.put({ id, key: aesKey });
 
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+      request.onsuccess = () => {
+        log('AES key stored successfully');
+      };
+
+      request.onerror = (e) => {
+        logError('Error storing AES key:', e);
+        reject(new Error(`Failed to store AES key: ${e}`));
+      };
+
+      tx.oncomplete = () => {
+        log('AES key transaction complete');
+        resolve();
+      };
+      tx.onerror = (e) => {
+        logError('Transaction error storing AES key:', e);
+        reject(new Error(`Transaction failed: ${e}`));
+      };
+    });
+  } catch (error) {
+    logError('Error in storeAesKeyInIDB:', error);
+    throw error;
+  }
 }
 
 async function getAesKeyFromIDB(id: string): Promise<CryptoKey | null> {
@@ -136,22 +187,46 @@ async function storeEncryptedEthersKey(
     ciphertext: string;
   }
 ): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(ETHERS_STORE, 'readwrite');
-    const store = tx.objectStore(ETHERS_STORE);
+  try {
+    log('Opening IndexedDB for encrypted Ethers key storage');
+    const db = await openDB();
+    log('IndexedDB opened successfully');
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(ETHERS_STORE, 'readwrite');
+      const store = tx.objectStore(ETHERS_STORE);
 
-    const record: EncryptedEthersKey = {
-      id,
-      address,
-      iv: encryptedData.iv,
-      ciphertext: encryptedData.ciphertext,
-    };
-    store.put(record);
+      const record: EncryptedEthersKey = {
+        id,
+        address,
+        iv: encryptedData.iv,
+        ciphertext: encryptedData.ciphertext,
+      };
 
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+      log('Putting encrypted Ethers key in object store');
+      const request = store.put(record);
+
+      request.onsuccess = () => {
+        log('Encrypted Ethers key stored successfully');
+      };
+
+      request.onerror = (e) => {
+        logError('Error storing encrypted Ethers key:', e);
+        reject(new Error(`Failed to store encrypted key: ${e}`));
+      };
+
+      tx.oncomplete = () => {
+        log('Encrypted Ethers key transaction complete');
+        resolve();
+      };
+      tx.onerror = (e) => {
+        logError('Transaction error storing encrypted Ethers key:', e);
+        reject(new Error(`Transaction failed: ${e}`));
+      };
+    });
+  } catch (error) {
+    logError('Error in storeEncryptedEthersKey:', error);
+    throw error;
+  }
 }
 
 async function getEncryptedEthersKey(id: string): Promise<{
@@ -217,6 +292,8 @@ self.onmessage = async (event) => {
   const { id: eventId, command, payload } = event.data;
 
   try {
+    log(`Received command: ${command}`, payload);
+
     switch (command) {
       case 'getAddress': {
         const ephemeralWallet = ephemeralWallets[payload.id];
@@ -270,29 +347,52 @@ self.onmessage = async (event) => {
           throw new Error('No ephemeral wallet generated');
         }
 
-        const encryptionKey = await crypto.subtle.generateKey(
-          { name: 'AES-GCM', length: 256 },
-          false, // non-extractable
-          ['encrypt', 'decrypt']
-        );
+        try {
+          log('About to generate encryption key');
+          // Check if crypto.subtle is available
+          if (!crypto || !crypto.subtle) {
+            throw new Error('Web Crypto API not available in this context');
+          }
 
-        const encryptedEthersKey = await encryptWithAesKey(
-          encryptionKey,
-          ephemeralWallets[payload.id].privateKey
-        );
+          // Try with a wrapped try/catch specifically for the key generation
+          const encryptionKey = await (async () => {
+            try {
+              return await crypto.subtle.generateKey(
+                { name: 'AES-GCM', length: 256 },
+                false, // non-extractable
+                ['encrypt', 'decrypt']
+              );
+            } catch (keyGenError: unknown) {
+              logError('Error generating key:', keyGenError);
+              const errorMessage =
+                keyGenError instanceof Error ? keyGenError.message : 'Unknown error';
+              throw new Error(`Failed to generate encryption key: ${errorMessage}`);
+            }
+          })();
 
-        await storeEncryptedEthersKey(
-          payload.id,
-          ephemeralWallets[payload.id].address,
-          encryptedEthersKey
-        );
-        await storeAesKeyInIDB(payload.id, encryptionKey);
+          log('Key generated successfully, proceeding to encrypt');
 
-        self.postMessage({
-          id: eventId,
-          command: 'persistKeyComplete',
-        });
+          const encryptedEthersKey = await encryptWithAesKey(
+            encryptionKey,
+            ephemeralWallets[payload.id].privateKey
+          );
 
+          await storeEncryptedEthersKey(
+            payload.id,
+            ephemeralWallets[payload.id].address,
+            encryptedEthersKey
+          );
+
+          await storeAesKeyInIDB(payload.id, encryptionKey);
+
+          self.postMessage({
+            id: eventId,
+            command: 'persistKeyComplete',
+          });
+        } catch (persistError) {
+          logError('Error in persistKey:', persistError);
+          throw persistError;
+        }
         break;
       }
       case 'sign': {
@@ -313,11 +413,19 @@ self.onmessage = async (event) => {
         });
         break;
       }
+      case 'setDebug': {
+        DEBUG_ENABLED = payload.enabled;
+        self.postMessage({
+          id: eventId,
+          command: 'setDebugComplete',
+        });
+        break;
+      }
       default:
         throw new Error('Unknown command: ' + command);
     }
   } catch (err: any) {
-    console.error('LoKey worker error:', err);
+    logError('LoKey worker error:', err);
     self.postMessage({
       id: eventId,
       command: 'error',
@@ -326,3 +434,7 @@ self.onmessage = async (event) => {
     });
   }
 };
+
+// Usage:
+// To enable/disable debugging, send a message to the worker:
+// worker.postMessage({ id: 'some-id', command: 'setDebug', payload: { enabled: true } });

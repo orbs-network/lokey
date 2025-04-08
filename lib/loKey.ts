@@ -37,7 +37,15 @@ export class LoKey {
       delete this.callbacks[id];
     };
 
-    this.worker.postMessage({ command: 'setDebug', payload: { enabled: opts.debug } });
+    // Initialize debug mode
+    if (opts.debug) {
+      const debugId = Math.random().toString(36).substring(7);
+      this.worker.postMessage({
+        id: debugId,
+        command: 'setDebug',
+        payload: { enabled: true },
+      });
+    }
   }
 
   private postCommand<T>(command: string, payload?: any): Promise<T> {
@@ -76,5 +84,9 @@ export class LoKey {
 
   async deleteKey(id: string): Promise<boolean> {
     return this.postCommand('deleteKey', { id });
+  }
+
+  async setDebug(enabled: boolean): Promise<boolean> {
+    return this.postCommand('setDebug', { enabled });
   }
 }

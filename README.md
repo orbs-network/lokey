@@ -14,19 +14,51 @@ npm install @orbs-network/lokey
 
 ## Usage
 
-### Constructor: `LoKey()`
+### Constructor: `LoKey(opts?: { debug?: boolean })`
 
 Initialise a new instance of LoKey.
 
 Example:
 
 ```javascript
+// Without debugging
 const lokey = new LoKey();
+
+// With debugging enabled
+const lokey = new LoKey({ debug: true });
 ```
+
+**Inputs**:
+
+- `opts.debug` (boolean, optional): Enable debug logging. Default: `false`
 
 **Outputs**:
 
 - `lokey`: A new instance of the LoKey SDK.
+
+---
+
+### `setDebug(enabled: boolean)`
+
+Enable or disable debug logging at runtime.
+
+Example:
+
+```javascript
+// Enable debugging
+await lokey.setDebug(true);
+
+// Disable debugging
+await lokey.setDebug(false);
+```
+
+**Inputs**:
+
+- `enabled` (boolean, required): Whether to enable debug logging
+
+**Outputs**:
+
+- `success` (boolean): Whether the debug mode was set successfully.
 
 ---
 

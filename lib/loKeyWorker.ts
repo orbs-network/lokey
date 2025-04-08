@@ -7,20 +7,24 @@ declare const self: Worker;
 // Debug flag - can be toggled via a message to the worker
 let DEBUG_ENABLED = false;
 
-// Logger utility that only logs when debugging is enabled
-function log(...args: any[]) {
-  if (DEBUG_ENABLED) {
-    console.log('[LoKeyWorker]', ...args);
-  }
-}
+// Logger utility that preserves logs even in production builds
+const loKeyLogger = {
+  log: function (...args: any[]) {
+    if (DEBUG_ENABLED) {
+      // Using Function constructor to prevent build tools from removing logs
+      new Function('console', `console.log('[LoKeyWorker]', ...arguments)`)(console, ...args);
+    }
+  },
+  error: function (...args: any[]) {
+    if (DEBUG_ENABLED) {
+      // Using Function constructor to prevent build tools from removing logs
+      new Function('console', `console.error('[LoKeyWorker]', ...arguments)`)(console, ...args);
+    }
+  },
+};
 
-function logError(...args: any[]) {
-  if (DEBUG_ENABLED) {
-    console.error('[LoKeyWorker]', ...args);
-  }
-}
-
-log('LoKey worker started');
+// Use these instead of the previous log/logError functions
+loKeyLogger.log('LoKey worker started');
 
 const ephemeralWallets: Record<string, HDNodeWallet> = {};
 
@@ -70,36 +74,36 @@ const ETHERS_STORE = 'ethersKeyStore';
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    log('Opening IndexedDB database:', DB_NAME);
+    loKeyLogger.log('Opening IndexedDB database:', DB_NAME);
     const openRequest = indexedDB.open(DB_NAME, 1);
 
     openRequest.onupgradeneeded = (event) => {
-      log('Database upgrade needed, creating object stores');
+      loKeyLogger.log('Database upgrade needed, creating object stores');
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(AES_STORE)) {
-        log('Creating AES_STORE object store');
+        loKeyLogger.log('Creating AES_STORE object store');
         db.createObjectStore(AES_STORE, { keyPath: 'id' });
       }
       if (!db.objectStoreNames.contains(ETHERS_STORE)) {
-        log('Creating ETHERS_STORE object store');
+        loKeyLogger.log('Creating ETHERS_STORE object store');
         db.createObjectStore(ETHERS_STORE, { keyPath: 'id' });
       }
     };
 
     openRequest.onsuccess = () => {
-      log('IndexedDB opened successfully');
+      loKeyLogger.log('IndexedDB opened successfully');
       resolve(openRequest.result);
     };
 
     openRequest.onerror = (event) => {
       const error = openRequest.error;
-      logError('Error opening IndexedDB:', error);
-      logError('Error event:', event);
+      loKeyLogger.error('Error opening IndexedDB:', error);
+      loKeyLogger.error('Error event:', event);
       reject(error || new Error('Unknown error opening IndexedDB'));
     };
 
     openRequest.onblocked = (event) => {
-      logError('IndexedDB open request blocked:', event);
+      loKeyLogger.error('IndexedDB open request blocked:', event);
       reject(new Error('IndexedDB open request blocked'));
     };
   });
@@ -107,36 +111,36 @@ function openDB(): Promise<IDBDatabase> {
 
 async function storeAesKeyInIDB(id: string, aesKey: CryptoKey): Promise<void> {
   try {
-    log('Opening IndexedDB for AES key storage');
+    loKeyLogger.log('Opening IndexedDB for AES key storage');
     const db = await openDB();
-    log('IndexedDB opened successfully');
+    loKeyLogger.log('IndexedDB opened successfully');
     return new Promise((resolve, reject) => {
       const tx = db.transaction(AES_STORE, 'readwrite');
       const store = tx.objectStore(AES_STORE);
 
-      log('Putting AES key in object store');
+      loKeyLogger.log('Putting AES key in object store');
       const request = store.put({ id, key: aesKey });
 
       request.onsuccess = () => {
-        log('AES key stored successfully');
+        loKeyLogger.log('AES key stored successfully');
       };
 
       request.onerror = (e) => {
-        logError('Error storing AES key:', e);
+        loKeyLogger.error('Error storing AES key:', e);
         reject(new Error(`Failed to store AES key: ${e}`));
       };
 
       tx.oncomplete = () => {
-        log('AES key transaction complete');
+        loKeyLogger.log('AES key transaction complete');
         resolve();
       };
       tx.onerror = (e) => {
-        logError('Transaction error storing AES key:', e);
+        loKeyLogger.error('Transaction error storing AES key:', e);
         reject(new Error(`Transaction failed: ${e}`));
       };
     });
   } catch (error) {
-    logError('Error in storeAesKeyInIDB:', error);
+    loKeyLogger.error('Error in storeAesKeyInIDB:', error);
     throw error;
   }
 }
@@ -188,9 +192,9 @@ async function storeEncryptedEthersKey(
   }
 ): Promise<void> {
   try {
-    log('Opening IndexedDB for encrypted Ethers key storage');
+    loKeyLogger.log('Opening IndexedDB for encrypted Ethers key storage');
     const db = await openDB();
-    log('IndexedDB opened successfully');
+    loKeyLogger.log('IndexedDB opened successfully');
     return new Promise((resolve, reject) => {
       const tx = db.transaction(ETHERS_STORE, 'readwrite');
       const store = tx.objectStore(ETHERS_STORE);
@@ -202,29 +206,29 @@ async function storeEncryptedEthersKey(
         ciphertext: encryptedData.ciphertext,
       };
 
-      log('Putting encrypted Ethers key in object store');
+      loKeyLogger.log('Putting encrypted Ethers key in object store');
       const request = store.put(record);
 
       request.onsuccess = () => {
-        log('Encrypted Ethers key stored successfully');
+        loKeyLogger.log('Encrypted Ethers key stored successfully');
       };
 
       request.onerror = (e) => {
-        logError('Error storing encrypted Ethers key:', e);
+        loKeyLogger.error('Error storing encrypted Ethers key:', e);
         reject(new Error(`Failed to store encrypted key: ${e}`));
       };
 
       tx.oncomplete = () => {
-        log('Encrypted Ethers key transaction complete');
+        loKeyLogger.log('Encrypted Ethers key transaction complete');
         resolve();
       };
       tx.onerror = (e) => {
-        logError('Transaction error storing encrypted Ethers key:', e);
+        loKeyLogger.error('Transaction error storing encrypted Ethers key:', e);
         reject(new Error(`Transaction failed: ${e}`));
       };
     });
   } catch (error) {
-    logError('Error in storeEncryptedEthersKey:', error);
+    loKeyLogger.error('Error in storeEncryptedEthersKey:', error);
     throw error;
   }
 }
@@ -292,7 +296,7 @@ self.onmessage = async (event) => {
   const { id: eventId, command, payload } = event.data;
 
   try {
-    log(`Received command: ${command}`, payload);
+    loKeyLogger.log(`Received command: ${command}`, payload);
 
     switch (command) {
       case 'getAddress': {
@@ -348,7 +352,7 @@ self.onmessage = async (event) => {
         }
 
         try {
-          log('About to generate encryption key');
+          loKeyLogger.log('About to generate encryption key');
           // Check if crypto.subtle is available
           if (!crypto || !crypto.subtle) {
             throw new Error('Web Crypto API not available in this context');
@@ -363,14 +367,14 @@ self.onmessage = async (event) => {
                 ['encrypt', 'decrypt']
               );
             } catch (keyGenError: unknown) {
-              logError('Error generating key:', keyGenError);
+              loKeyLogger.error('Error generating key:', keyGenError);
               const errorMessage =
                 keyGenError instanceof Error ? keyGenError.message : 'Unknown error';
               throw new Error(`Failed to generate encryption key: ${errorMessage}`);
             }
           })();
 
-          log('Key generated successfully, proceeding to encrypt');
+          loKeyLogger.log('Key generated successfully, proceeding to encrypt');
 
           const encryptedEthersKey = await encryptWithAesKey(
             encryptionKey,
@@ -390,7 +394,7 @@ self.onmessage = async (event) => {
             command: 'persistKeyComplete',
           });
         } catch (persistError) {
-          logError('Error in persistKey:', persistError);
+          loKeyLogger.error('Error in persistKey:', persistError);
           throw persistError;
         }
         break;
@@ -425,7 +429,7 @@ self.onmessage = async (event) => {
         throw new Error('Unknown command: ' + command);
     }
   } catch (err: any) {
-    logError('LoKey worker error:', err);
+    loKeyLogger.error('LoKey worker error:', err);
     self.postMessage({
       id: eventId,
       command: 'error',
